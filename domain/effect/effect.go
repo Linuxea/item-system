@@ -1,11 +1,16 @@
 package effect
 
-import "context"
+import (
+	"context"
+	"errors"
+	"time"
+)
 
 const (
-	KindAddCurrency = "add_currency"
-	KindGrantItem   = "grant_item"
-	KindRandomGrant = "random_grant"
+	KindAddCurrency     = "add_currency"
+	KindGrantItem       = "grant_item"
+	KindRandomGrant     = "random_grant"
+	KindBroadcastBanner = "broadcast_banner"
 )
 
 type Command interface {
@@ -38,10 +43,23 @@ type RandomGrant struct {
 
 func (c RandomGrant) Kind() string { return KindRandomGrant }
 
+type BroadcastBanner struct {
+	Duration  time.Duration
+	TextParam string
+}
+
+func (c BroadcastBanner) Kind() string { return KindBroadcastBanner }
+
+var ErrMissingParam = errors.New("required use param missing")
+
+type BannerBroadcaster interface {
+	Broadcast(ctx context.Context, owner, text string, duration time.Duration) error
+}
+
 type Ledger interface {
 	Add(ctx context.Context, owner, currency string, amount int64) error
 }
 
 type Executor interface {
-	Execute(ctx context.Context, owner string, cmds []Command) error
+	Execute(ctx context.Context, owner string, params map[string]any, cmds []Command) error
 }

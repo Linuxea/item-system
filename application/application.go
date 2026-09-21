@@ -25,6 +25,7 @@ type Deps struct {
 	Publisher   event.Publisher
 	Registry    *behavior.Registry
 	Ledger      effect.Ledger
+	Banner      effect.BannerBroadcaster
 	Conditions  behavior.ConditionChecker
 	Relations   relation.Repo
 	Sorts       *profile.SortRegistry
@@ -59,7 +60,7 @@ func New(deps Deps) *App {
 	}
 
 	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, deps.NewID, deps.Now)
-	executor := newEffectExecutor(grantSvc, deps.Ledger, deps.Rand)
+	executor := newEffectExecutor(grantSvc, deps.Ledger, deps.Banner, deps.Rand)
 	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, executor, deps.Now)
 	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Conditions, deps.Now)
 	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, deps.Registry, deps.Sorts, deps.Now)
@@ -174,23 +175,24 @@ func (a *App) itemRequiresRelation(ctx context.Context, instanceID string, t rel
 type effectExecutor struct {
 	grants *grant.Service
 	ledger effect.Ledger
+	banner effect.BannerBroadcaster
 	rand   func(n int64) int64
 }
 
-func newEffectExecutor(grants *grant.Service, ledger effect.Ledger, rand func(n int64) int64) effect.Executor {
-	return &effectExecutor{grants: grants, ledger: ledger, rand: rand}
+func newEffectExecutor(grants *grant.Service, ledger effect.Ledger, banner effect.BannerBroadcaster, rand func(n int64) int64) effect.Executor {
+	return &effectExecutor{grants: grants, ledger: ledger, banner: banner, rand: rand}
 }
 
-func (e *effectExecutor) Execute(ctx context.Context, owner string, cmds []effect.Command) error {
+func (e *effectExecutor) Execute(ctx context.Context, owner string, params map[string]any, cmds []effect.Command) error {
 	for _, cmd := range cmds {
-		if err := e.exec(ctx, owner, cmd); err != nil {
+		if err := e.exec(ctx, owner, params, cmd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *effectExecutor) exec(ctx context.Context, owner string, cmd effect.Command) error {
+func (e *effectExecutor) exec(ctx context.Context, owner string, params map[string]any, cmd effect.Command) error {
 	switch c := cmd.(type) {
 	case effect.AddCurrency:
 		if e.ledger == nil {
@@ -219,6 +221,15 @@ func (e *effectExecutor) exec(ctx context.Context, owner string, cmd effect.Comm
 			Reason:     effect.KindRandomGrant,
 		})
 		return err
+	case effect.BroadcastBanner:
+		text, _ := params[c.TextParam].(string)
+		if text == "" {
+			return effect.ErrMissingParam
+		}
+		if e.banner == nil {
+			return nil
+		}
+		return e.banner.Broadcast(ctx, owner, text, c.Duration)
 	default:
 		return nil
 	}

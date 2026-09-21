@@ -134,3 +134,26 @@ func RelationCards() []*model.ItemTemplate {
 		},
 	}
 }
+
+func Banners() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "banner_rose", Category: model.CategoryConsumable, Name: "Rose Banner", Priority: 0, Rarity: 2,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyStackable: {"max_stack": int64(99)},
+				behavior.KeyUsable: {"effects": []any{
+					map[string]any{"kind": "broadcast_banner", "duration": "10s", "param": "text"},
+				}},
+			},
+		},
+		{
+			ID: "banner_fire_30s", Category: model.CategoryConsumable, Name: "Fire Banner (30s)", Priority: 0, Rarity: 4,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyStackable: {"max_stack": int64(99)},
+				behavior.KeyUsable: {"effects": []any{
+					map[string]any{"kind": "broadcast_banner", "duration": "30s", "param": "text"},
+				}},
+			},
+		},
+	}
+}

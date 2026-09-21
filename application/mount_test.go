@@ -27,6 +27,7 @@ func newStackWithClock(t *testing.T, tpls []*model.ItemTemplate) (*application.A
 		Ledger:      s.Ledger,
 		Conditions:  &memory.ConditionChecker{Levels: s.Levels, Relations: s.Relations},
 		Relations:   s.Relations,
+		Banner:      s.Banner,
 		NewID:       memory.NewIDGenerator("inst_").Next,
 		Now:         func() time.Time { return *clock },
 		Rand:        func(int64) int64 { return 0 },

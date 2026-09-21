@@ -28,6 +28,7 @@ type Request struct {
 	InstanceID     string
 	Count          int64
 	IdempotencyKey string
+	Params         map[string]any
 }
 
 type Service struct {
@@ -109,7 +110,7 @@ func (s *Service) Use(ctx context.Context, req Request) (*model.UseResult, error
 	}
 
 	for i := int64(0); i < req.Count; i++ {
-		if err := s.executor.Execute(ctx, req.Owner, usable.Effects); err != nil {
+		if err := s.executor.Execute(ctx, req.Owner, req.Params, usable.Effects); err != nil {
 			s.release(ctx, req.IdempotencyKey)
 			return nil, err
 		}

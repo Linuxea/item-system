@@ -274,6 +274,34 @@ func (l *Ledger) Balance(owner, currency string) int64 {
 
 var _ effect.Ledger = (*Ledger)(nil)
 
+type BannerRecord struct {
+	Owner    string
+	Text     string
+	Duration time.Duration
+}
+
+type BannerRecorder struct {
+	mu      sync.Mutex
+	records []BannerRecord
+}
+
+func NewBannerRecorder() *BannerRecorder {
+	return &BannerRecorder{}
+}
+
+func (b *BannerRecorder) Broadcast(_ context.Context, owner, text string, duration time.Duration) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.records = append(b.records, BannerRecord{Owner: owner, Text: text, Duration: duration})
+	return nil
+}
+
+func (b *BannerRecorder) Records() []BannerRecord {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]BannerRecord(nil), b.records...)
+}
+
 type LevelSource struct {
 	mu     sync.Mutex
 	levels map[string]int64
@@ -428,6 +456,7 @@ type Stack struct {
 	Idempotency *IdempotencyStore
 	Levels      *LevelSource
 	Relations   *RelationRepo
+	Banner      *BannerRecorder
 }
 
 func NewStack(tpls ...*model.ItemTemplate) *Stack {
@@ -439,6 +468,7 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 	ledger := NewLedger()
 	levels := NewLevelSource()
 	relations := NewRelationRepo()
+	banner := NewBannerRecorder()
 	app := application.New(application.Deps{
 		Templates:   templates,
 		Instances:   instances,
@@ -446,6 +476,7 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Idempotency: idem,
 		Publisher:   bus,
 		Ledger:      ledger,
+		Banner:      banner,
 		Conditions:  &ConditionChecker{Levels: levels, Relations: relations},
 		Relations:   relations,
 		NewID:       NewIDGenerator("inst_").Next,
@@ -460,5 +491,6 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Idempotency: idem,
 		Levels:      levels,
 		Relations:   relations,
+		Banner:      banner,
 	}
 }
