@@ -175,3 +175,22 @@ func ChatBubbles() []*model.ItemTemplate {
 		},
 	}
 }
+
+func Nameplates() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "np_ember", Category: model.CategoryNamePlate, Name: "Ember Plate", Priority: 80, Rarity: 4,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotNamePlate), "capacity": 1},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "plate_color", "value": "ember"}}},
+			},
+		},
+		{
+			ID: "np_festival_72h", Category: model.CategoryNamePlate, Name: "Festival Plate (72h)", Priority: 82, Rarity: 5,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotNamePlate), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "72h", "on_expire": behavior.ExpirePolicyRemove},
+			},
+		},
+	}
+}
