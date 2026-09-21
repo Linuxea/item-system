@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
 )
 
 func TestVIPDowngradeChain(t *testing.T) {

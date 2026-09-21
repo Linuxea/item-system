@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Go library (`github.com/linuxea/item-system`), Go 1.27. No CI, no Makefile — plain Go toolchain. Read `docs/DESIGN.md` first; it documents the architecture and the rationale behind every rule below.
+Go library (`github.com/Linuxea/item-system`), Go 1.27. No CI, no Makefile — plain Go toolchain. Read `docs/DESIGN.md` first; it documents the architecture and the rationale behind every rule below.
 
 ## Verify before committing
 

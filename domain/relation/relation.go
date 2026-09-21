@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/event"
 )
 
 // Type 关系类型。

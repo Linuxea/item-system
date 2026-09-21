@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/usage"
-	"github.com/linuxea/item-system/infrastructure/memory"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/usage"
+	"github.com/Linuxea/item-system/infrastructure/memory"
 )
 
 func badge() *model.ItemTemplate {

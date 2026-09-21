@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/repository"
-	"github.com/linuxea/item-system/infrastructure/memory"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/repository"
+	"github.com/Linuxea/item-system/infrastructure/memory"
 )
 
 func newStack(tpls ...*model.ItemTemplate) *memory.Stack {

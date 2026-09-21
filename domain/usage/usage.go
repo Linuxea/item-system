@@ -6,11 +6,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/effect"
-	"github.com/linuxea/item-system/domain/event"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/repository"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/repository"
 )
 
 var (

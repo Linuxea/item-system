@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/effect"
 )
 
 type ledgerFunc func(ctx context.Context, owner, currency string, amount int64) error

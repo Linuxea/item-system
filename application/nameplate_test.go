@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/event"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
 )
 
 func TestNameplatePermanentAndExpirable(t *testing.T) {

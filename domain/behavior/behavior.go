@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/linuxea/item-system/domain/effect"
-	"github.com/linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/model"
 )
 
 // 行为组件 key：模板 Behaviors 配置 map 的键。

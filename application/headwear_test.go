@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/event"
-	"github.com/linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/model"
 )
 
 func TestHeadwearEquipAndProfile(t *testing.T) {

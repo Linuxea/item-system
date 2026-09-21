@@ -5,9 +5,9 @@
 package catalog
 
 import (
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/relation"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/relation"
 )
 
 // Mounts 座驾模板：穿戴进 mount 槽，带移速被动与等级前置条件，7d 款到期即删。

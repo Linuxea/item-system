@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
 )
 
 func item(id string, priority, rarity int, at time.Time) profile.DisplayItem {

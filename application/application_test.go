@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/application"
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/event"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
-	"github.com/linuxea/item-system/domain/usage"
-	"github.com/linuxea/item-system/infrastructure/memory"
+	"github.com/Linuxea/item-system/application"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/domain/usage"
+	"github.com/Linuxea/item-system/infrastructure/memory"
 )
 
 type fixedRand struct{ n int64 }

@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linuxea/item-system/application"
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
-	"github.com/linuxea/item-system/domain/relation"
-	"github.com/linuxea/item-system/infrastructure/memory"
+	"github.com/Linuxea/item-system/application"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/domain/relation"
+	"github.com/Linuxea/item-system/infrastructure/memory"
 )
 
 func relStack(t *testing.T) (*application.App, *memory.Stack, *time.Time) {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
 )
 
 func grantAndEquip(t *testing.T, app interface {

@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/model"
 )
 
 // TemplateSource 模板只读源。模板是只读配置，无写入端口。

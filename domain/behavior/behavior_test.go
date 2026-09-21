@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/effect"
-	"github.com/linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/model"
 )
 
 func TestCompileBuiltins(t *testing.T) {

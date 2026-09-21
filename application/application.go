@@ -8,16 +8,16 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/linuxea/item-system/domain/behavior"
-	"github.com/linuxea/item-system/domain/effect"
-	"github.com/linuxea/item-system/domain/event"
-	"github.com/linuxea/item-system/domain/expiry"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/profile"
-	"github.com/linuxea/item-system/domain/relation"
-	"github.com/linuxea/item-system/domain/repository"
-	"github.com/linuxea/item-system/domain/usage"
+	"github.com/Linuxea/item-system/domain/behavior"
+	"github.com/Linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/event"
+	"github.com/Linuxea/item-system/domain/expiry"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/profile"
+	"github.com/Linuxea/item-system/domain/relation"
+	"github.com/Linuxea/item-system/domain/repository"
+	"github.com/Linuxea/item-system/domain/usage"
 )
 
 // Deps 全量依赖集合，仅在 New 装配时使用一次。

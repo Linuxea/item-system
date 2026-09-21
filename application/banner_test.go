@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/effect"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/model"
-	"github.com/linuxea/item-system/domain/usage"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/effect"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/model"
+	"github.com/Linuxea/item-system/domain/usage"
 )
 
 func TestBannerUseBroadcastsText(t *testing.T) {

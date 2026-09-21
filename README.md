@@ -1,6 +1,6 @@
 # item-system
 
-Go 实现的道具子系统库（`github.com/linuxea/item-system`）。面向游戏 / 社交业务中的虚拟物品场景：发放、使用、穿戴、时效、双主体关系与展示快照。
+Go 实现的道具子系统库（`github.com/Linuxea/item-system`）。面向游戏 / 社交业务中的虚拟物品场景：发放、使用、穿戴、时效、双主体关系与展示快照。
 
 设计原则：**组合优于继承**。新增道具类型 = 配置数据 + 既有行为组件的组合，核心零改动。
 
@@ -55,10 +55,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/linuxea/item-system/catalog"
-	"github.com/linuxea/item-system/domain/grant"
-	"github.com/linuxea/item-system/domain/usage"
-	"github.com/linuxea/item-system/infrastructure/memory"
+	"github.com/Linuxea/item-system/catalog"
+	"github.com/Linuxea/item-system/domain/grant"
+	"github.com/Linuxea/item-system/domain/usage"
+	"github.com/Linuxea/item-system/infrastructure/memory"
 )
 
 func main() {
