@@ -5,14 +5,16 @@ import "time"
 type Category string
 
 const (
-	CategoryAvatar     Category = "avatar"
-	CategoryNamePlate  Category = "nameplate"
-	CategoryBadge      Category = "badge"
-	CategoryVIP        Category = "vip"
-	CategoryConsumable Category = "consumable"
-	CategoryCurrency   Category = "currency"
-	CategoryMount      Category = "mount"
-	CategoryHeadwear   Category = "headwear"
+	CategoryAvatar       Category = "avatar"
+	CategoryNamePlate    Category = "nameplate"
+	CategoryBadge        Category = "badge"
+	CategoryVIP          Category = "vip"
+	CategoryConsumable   Category = "consumable"
+	CategoryCurrency     Category = "currency"
+	CategoryMount        Category = "mount"
+	CategoryHeadwear     Category = "headwear"
+	CategoryRelationCard Category = "relation_card"
+	CategoryCPRing       Category = "cp_ring"
 )
 
 type SlotType string
@@ -24,6 +26,8 @@ const (
 	SlotVIP       SlotType = "vip"
 	SlotMount     SlotType = "mount"
 	SlotHeadwear  SlotType = "headwear"
+	SlotRelation  SlotType = "relation"
+	SlotCPRing    SlotType = "cp_ring"
 )
 
 type InstanceStatus string

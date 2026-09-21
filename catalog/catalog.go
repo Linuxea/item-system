@@ -3,6 +3,7 @@ package catalog
 import (
 	"github.com/linuxea/item-system/domain/behavior"
 	"github.com/linuxea/item-system/domain/model"
+	"github.com/linuxea/item-system/domain/relation"
 )
 
 func Mounts() []*model.ItemTemplate {
@@ -109,6 +110,26 @@ func VIPs() []*model.ItemTemplate {
 				behavior.KeyEquippable: {"slot": string(model.SlotVIP), "capacity": 1},
 				behavior.KeyExpirable:  {"duration": "24h", "on_expire": behavior.ExpirePolicyRemove},
 				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "vip_level", "value": float64(1)}}},
+			},
+		},
+	}
+}
+
+func RelationCards() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "card_master", Category: model.CategoryRelationCard, Name: "Master Card", Priority: 50, Rarity: 3,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotRelation), "capacity": 1},
+				behavior.KeyCondition:  {"requires_relation": string(relation.TypeMaster)},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "mentor_tag", "value": true}}},
+			},
+		},
+		{
+			ID: "card_bestie", Category: model.CategoryRelationCard, Name: "Bestie Card", Priority: 50, Rarity: 3,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotRelation), "capacity": 2},
+				behavior.KeyCondition:  {"requires_relation": string(relation.TypeBestie)},
 			},
 		},
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/linuxea/item-system/domain/effect"
 	"github.com/linuxea/item-system/domain/event"
 	"github.com/linuxea/item-system/domain/model"
+	"github.com/linuxea/item-system/domain/relation"
 	"github.com/linuxea/item-system/domain/repository"
 )
 
@@ -294,17 +295,101 @@ func (s *LevelSource) Level(owner string) int64 {
 	return s.levels[owner]
 }
 
+type RelationRepo struct {
+	mu        sync.Mutex
+	relations map[string]*relation.Relation
+}
+
+func NewRelationRepo() *RelationRepo {
+	return &RelationRepo{relations: map[string]*relation.Relation{}}
+}
+
+func (r *RelationRepo) Save(_ context.Context, rel *relation.Relation) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.relations[rel.ID]; exists {
+		return &repository.ErrNotFound{Entity: "duplicate relation " + rel.ID}
+	}
+	cp := *rel
+	r.relations[rel.ID] = &cp
+	return nil
+}
+
+func (r *RelationRepo) Get(_ context.Context, id string) (*relation.Relation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rel, ok := r.relations[id]
+	if !ok {
+		return nil, relation.ErrNotFound
+	}
+	cp := *rel
+	return &cp, nil
+}
+
+func (r *RelationRepo) FindActive(_ context.Context, owner string, t relation.Type) (*relation.Relation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	for _, rel := range r.relations {
+		if rel.Type == t && rel.Status == relation.StatusActive && rel.Involves(owner) && !rel.Expired(now) {
+			cp := *rel
+			return &cp, nil
+		}
+	}
+	return nil, relation.ErrNotFound
+}
+
+func (r *RelationRepo) ListExpired(_ context.Context, before time.Time, limit int) ([]*relation.Relation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*relation.Relation
+	for _, rel := range r.relations {
+		if rel.Status == relation.StatusActive && rel.Expired(before) {
+			cp := *rel
+			out = append(out, &cp)
+		}
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (r *RelationRepo) Update(_ context.Context, rel *relation.Relation, expectVersion int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur, ok := r.relations[rel.ID]
+	if !ok {
+		return relation.ErrNotFound
+	}
+	if cur.Version != expectVersion {
+		return &repository.ErrVersionConflict{Entity: "relation " + rel.ID}
+	}
+	cp := *rel
+	r.relations[rel.ID] = &cp
+	return nil
+}
+
 type ConditionChecker struct {
-	Levels *LevelSource
+	Levels    *LevelSource
+	Relations *RelationRepo
 }
 
 func NewConditionChecker(levels *LevelSource) *ConditionChecker {
 	return &ConditionChecker{Levels: levels}
 }
 
-func (c *ConditionChecker) Satisfied(_ context.Context, owner string, cond behavior.Condition) (bool, error) {
+func (c *ConditionChecker) Satisfied(ctx context.Context, owner string, cond behavior.Condition) (bool, error) {
 	if cond.MinLevel > 0 && c.Levels.Level(owner) < cond.MinLevel {
 		return false, nil
+	}
+	if cond.RequiresRelation != "" {
+		if c.Relations == nil {
+			return false, nil
+		}
+		if _, err := c.Relations.FindActive(ctx, owner, relation.Type(cond.RequiresRelation)); err != nil {
+			return false, nil
+		}
 	}
 	return true, nil
 }
@@ -335,6 +420,7 @@ type Stack struct {
 	Equips      *EquipRepo
 	Idempotency *IdempotencyStore
 	Levels      *LevelSource
+	Relations   *RelationRepo
 }
 
 func NewStack(tpls ...*model.ItemTemplate) *Stack {
@@ -345,6 +431,7 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 	idem := NewIdempotencyStore()
 	ledger := NewLedger()
 	levels := NewLevelSource()
+	relations := NewRelationRepo()
 	app := application.New(application.Deps{
 		Templates:   templates,
 		Instances:   instances,
@@ -352,7 +439,8 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Idempotency: idem,
 		Publisher:   bus,
 		Ledger:      ledger,
-		Conditions:  &ConditionChecker{Levels: levels},
+		Conditions:  &ConditionChecker{Levels: levels, Relations: relations},
+		Relations:   relations,
 		NewID:       NewIDGenerator("inst_").Next,
 	})
 	return &Stack{
@@ -364,5 +452,6 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Equips:      equips,
 		Idempotency: idem,
 		Levels:      levels,
+		Relations:   relations,
 	}
 }

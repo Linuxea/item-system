@@ -12,6 +12,7 @@ import (
 	"github.com/linuxea/item-system/domain/grant"
 	"github.com/linuxea/item-system/domain/model"
 	"github.com/linuxea/item-system/domain/profile"
+	"github.com/linuxea/item-system/domain/relation"
 	"github.com/linuxea/item-system/domain/repository"
 	"github.com/linuxea/item-system/domain/usage"
 )
@@ -25,6 +26,7 @@ type Deps struct {
 	Registry    *behavior.Registry
 	Ledger      effect.Ledger
 	Conditions  behavior.ConditionChecker
+	Relations   relation.Repo
 	Sorts       *profile.SortRegistry
 	NewID       func() string
 	Now         func() time.Time
@@ -32,13 +34,14 @@ type Deps struct {
 }
 
 type App struct {
-	deps       Deps
-	GrantSvc   *grant.Service
-	UseSvc     *usage.Service
-	EquipSvc   *profile.EquipService
-	ProfileSvc *profile.ProfileService
-	Sorts      *profile.SortRegistry
-	ExpirySvc  *expiry.Service
+	deps        Deps
+	GrantSvc    *grant.Service
+	UseSvc      *usage.Service
+	EquipSvc    *profile.EquipService
+	ProfileSvc  *profile.ProfileService
+	Sorts       *profile.SortRegistry
+	ExpirySvc   *expiry.Service
+	RelationSvc *relation.Service
 }
 
 func New(deps Deps) *App {
@@ -61,15 +64,17 @@ func New(deps Deps) *App {
 	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Conditions, deps.Now)
 	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, deps.Registry, deps.Sorts, deps.Now)
 	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Now)
+	relationSvc := relation.NewService(deps.Relations, deps.Publisher, deps.NewID, deps.Now)
 
 	return &App{
-		deps:       deps,
-		GrantSvc:   grantSvc,
-		UseSvc:     useSvc,
-		EquipSvc:   equipSvc,
-		ProfileSvc: profileSvc,
-		Sorts:      deps.Sorts,
-		ExpirySvc:  expirySvc,
+		deps:        deps,
+		GrantSvc:    grantSvc,
+		UseSvc:      useSvc,
+		EquipSvc:    equipSvc,
+		ProfileSvc:  profileSvc,
+		Sorts:       deps.Sorts,
+		ExpirySvc:   expirySvc,
+		RelationSvc: relationSvc,
 	}
 }
 
@@ -95,6 +100,75 @@ func (a *App) BuildProfile(ctx context.Context, owner, scene string) (*profile.S
 
 func (a *App) RunExpiry(ctx context.Context, limit int) (int, error) {
 	return a.ExpirySvc.Run(ctx, limit)
+}
+
+func (a *App) BindRelation(ctx context.Context, t relation.Type, partyA, partyB string, expireAt *time.Time) (*relation.Relation, error) {
+	return a.RelationSvc.Bind(ctx, t, partyA, partyB, expireAt)
+}
+
+func (a *App) DissolveRelation(ctx context.Context, id string) error {
+	rel, err := a.deps.Relations.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := a.RelationSvc.Dissolve(ctx, id); err != nil {
+		return err
+	}
+	return a.unlinkRelationItems(ctx, rel.PartyA, rel.PartyB, rel.Type)
+}
+
+func (a *App) RunRelationExpiry(ctx context.Context, limit int) (int, error) {
+	expired, err := a.deps.Relations.ListExpired(ctx, a.deps.Now(), limit)
+	if err != nil {
+		return 0, err
+	}
+	if n, err := a.RelationSvc.RunExpiry(ctx, limit); err != nil {
+		return n, err
+	}
+	for _, rel := range expired {
+		if err := a.unlinkRelationItems(ctx, rel.PartyA, rel.PartyB, rel.Type); err != nil {
+			return len(expired), err
+		}
+	}
+	return len(expired), nil
+}
+
+func (a *App) unlinkRelationItems(ctx context.Context, partyA, partyB string, t relation.Type) error {
+	for _, owner := range []string{partyA, partyB} {
+		records, err := a.deps.Equips.ListByOwner(ctx, owner)
+		if err != nil {
+			return err
+		}
+		for _, rec := range records {
+			if rec.Slot != model.SlotRelation && rec.Slot != model.SlotCPRing {
+				continue
+			}
+			if !a.itemRequiresRelation(ctx, rec.InstanceID, t) {
+				continue
+			}
+			if err := a.EquipSvc.Unequip(ctx, owner, rec.InstanceID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) itemRequiresRelation(ctx context.Context, instanceID string, t relation.Type) bool {
+	inst, err := a.deps.Instances.Get(ctx, instanceID)
+	if err != nil {
+		return false
+	}
+	tpl, err := a.deps.Templates.Get(ctx, inst.TemplateID)
+	if err != nil {
+		return false
+	}
+	compiled, err := a.deps.Registry.Compile(tpl)
+	if err != nil {
+		return false
+	}
+	cond, ok := compiled.Condition()
+	return ok && cond.RequiresRelation == string(t)
 }
 
 type effectExecutor struct {
