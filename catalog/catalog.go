@@ -34,3 +34,27 @@ func Mounts() []*model.ItemTemplate {
 		},
 	}
 }
+
+func Badges() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "badge_abyss", Category: model.CategoryBadge, Name: "Abyss Conqueror", Priority: 70, Rarity: 5,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotBadge), "capacity": 3},
+			},
+		},
+		{
+			ID: "badge_flame", Category: model.CategoryBadge, Name: "Flame Veteran", Priority: 70, Rarity: 3,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotBadge), "capacity": 3},
+			},
+		},
+		{
+			ID: "badge_rookie", Category: model.CategoryBadge, Name: "Rookie Star", Priority: 40, Rarity: 1,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotBadge), "capacity": 3},
+				behavior.KeyStackable:  {"max_stack": int64(1)},
+			},
+		},
+	}
+}
