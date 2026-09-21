@@ -58,3 +58,22 @@ func Badges() []*model.ItemTemplate {
 		},
 	}
 }
+
+func Headwear() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "crown_aurora", Category: model.CategoryHeadwear, Name: "Aurora Crown", Priority: 88, Rarity: 5,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotHeadwear), "capacity": 1},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "head_glow", "value": "aurora"}}},
+			},
+		},
+		{
+			ID: "cap_sprint_3d", Category: model.CategoryHeadwear, Name: "Sprint Cap (3d)", Priority: 55, Rarity: 2,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotHeadwear), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "72h", "on_expire": behavior.ExpirePolicyUnequip},
+			},
+		},
+	}
+}

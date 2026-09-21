@@ -12,6 +12,7 @@ const (
 	CategoryConsumable Category = "consumable"
 	CategoryCurrency   Category = "currency"
 	CategoryMount      Category = "mount"
+	CategoryHeadwear   Category = "headwear"
 )
 
 type SlotType string
@@ -22,6 +23,7 @@ const (
 	SlotBadge     SlotType = "badge"
 	SlotVIP       SlotType = "vip"
 	SlotMount     SlotType = "mount"
+	SlotHeadwear  SlotType = "headwear"
 )
 
 type InstanceStatus string
