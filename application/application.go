@@ -58,16 +58,17 @@ func New(deps Deps) *App {
 
 	granter := &grantAdapter{}
 	registry := behavior.NewRegistry(behavior.Ports{
-		Ledger:  deps.Ledger,
-		Banner:  deps.Banner,
-		Granter: granter,
-		Rand:    deps.Rand,
+		Ledger:     deps.Ledger,
+		Banner:     deps.Banner,
+		Granter:    granter,
+		Rand:       deps.Rand,
+		Conditions: deps.Conditions,
 	})
 	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, registry, deps.NewID, deps.Now)
 	granter.svc = grantSvc
 
 	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, registry, deps.Now)
-	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, registry, deps.Conditions, deps.Now)
+	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, registry, deps.Now)
 	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, registry, deps.Sorts, deps.Now)
 	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, registry, deps.Now)
 	relationSvc := relation.NewService(deps.Relations, deps.Publisher, deps.NewID, deps.Now)

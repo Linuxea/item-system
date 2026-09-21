@@ -1,6 +1,7 @@
 package behavior_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/linuxea/item-system/domain/behavior"
@@ -67,5 +68,52 @@ func TestCompileInvalidExpiryPolicy(t *testing.T) {
 	}
 	if _, err := r.Compile(tpl); err == nil {
 		t.Fatalf("expected error for invalid policy")
+	}
+}
+
+type fixedChecker struct {
+	ownerOK string
+}
+
+func (c fixedChecker) Satisfied(_ context.Context, owner string, _ behavior.Condition) (bool, error) {
+	return owner == c.ownerOK, nil
+}
+
+func TestConditionChecksItselfWithInjectedChecker(t *testing.T) {
+	r := behavior.NewRegistry(behavior.Ports{Conditions: fixedChecker{ownerOK: "p1"}})
+	tpl := &model.ItemTemplate{
+		ID: "gated",
+		Behaviors: map[string]map[string]any{
+			behavior.KeyCondition: {"min_level": int64(30), "requires_relation": "cp"},
+		},
+	}
+	c, err := r.Compile(tpl)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	cond, ok := c.Condition()
+	if !ok || cond.MinLevel != 30 || cond.RequiresRelation != "cp" {
+		t.Fatalf("condition wrong: %+v", cond)
+	}
+	if met, _ := cond.Met(context.Background(), "p1"); !met {
+		t.Fatalf("p1 should pass")
+	}
+	if met, _ := cond.Met(context.Background(), "p2"); met {
+		t.Fatalf("p2 should fail")
+	}
+}
+
+func TestConditionWithoutCheckerAlwaysPasses(t *testing.T) {
+	r := behavior.NewRegistry(behavior.Ports{})
+	tpl := &model.ItemTemplate{
+		ID: "free",
+		Behaviors: map[string]map[string]any{
+			behavior.KeyCondition: {"min_level": int64(99)},
+		},
+	}
+	c, _ := r.Compile(tpl)
+	cond, _ := c.Condition()
+	if met, _ := cond.Met(context.Background(), "anyone"); !met {
+		t.Fatalf("nil checker should allow")
 	}
 }

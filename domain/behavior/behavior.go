@@ -71,9 +71,17 @@ func (b Passive) Key() string { return KeyPassive }
 type Condition struct {
 	MinLevel         int64
 	RequiresRelation string
+	checker          ConditionChecker
 }
 
 func (b Condition) Key() string { return KeyCondition }
+
+func (b Condition) Met(ctx context.Context, owner string) (bool, error) {
+	if b.checker == nil {
+		return true, nil
+	}
+	return b.checker.Satisfied(ctx, owner, b)
+}
 
 type ConditionChecker interface {
 	Satisfied(ctx context.Context, owner string, cond Condition) (bool, error)
@@ -82,10 +90,11 @@ type ConditionChecker interface {
 type Factory func(cfg map[string]any) (Behavior, error)
 
 type Ports struct {
-	Ledger  effect.Ledger
-	Banner  effect.BannerBroadcaster
-	Granter effect.Granter
-	Rand    func(n int64) int64
+	Ledger     effect.Ledger
+	Banner     effect.BannerBroadcaster
+	Granter    effect.Granter
+	Rand       func(n int64) int64
+	Conditions ConditionChecker
 }
 
 type Registry struct {
@@ -103,8 +112,14 @@ func NewRegistry(ports Ports) *Registry {
 	})
 	r.Register(KeyBindable, bindableFactory)
 	r.Register(KeyPassive, passiveFactory)
-	r.Register(KeyCondition, conditionFactory)
+	r.Register(KeyCondition, func(cfg map[string]any) (Behavior, error) {
+		return conditionFactory(cfg, r.ports)
+	})
 	return r
+}
+
+type Compiler interface {
+	Compile(tpl *model.ItemTemplate) (*Compiled, error)
 }
 
 func (r *Registry) Register(key string, f Factory) {
@@ -298,10 +313,11 @@ func passiveFactory(cfg map[string]any) (Behavior, error) {
 	return Passive{Modifiers: mods}, nil
 }
 
-func conditionFactory(cfg map[string]any) (Behavior, error) {
+func conditionFactory(cfg map[string]any, ports Ports) (Behavior, error) {
 	return Condition{
 		MinLevel:         getInt(cfg, "min_level", 0),
 		RequiresRelation: getString(cfg, "requires_relation", ""),
+		checker:          ports.Conditions,
 	}, nil
 }
 

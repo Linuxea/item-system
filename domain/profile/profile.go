@@ -89,33 +89,42 @@ func TopN(n int, inner SortPolicy) SortPolicy {
 	}
 }
 
+type instanceStore interface {
+	Get(ctx context.Context, id string) (*model.ItemInstance, error)
+	Update(ctx context.Context, inst *model.ItemInstance, expectVersion int64) error
+}
+
+type equipRecords interface {
+	ListByOwner(ctx context.Context, owner string) ([]model.EquipRecord, error)
+	ListBySlot(ctx context.Context, owner string, slot model.SlotType) ([]model.EquipRecord, error)
+	Save(ctx context.Context, rec model.EquipRecord) error
+	Delete(ctx context.Context, owner string, slot model.SlotType, instanceID string) error
+}
+
 type EquipService struct {
-	templates  repository.TemplateSource
-	instances  repository.InstanceRepo
-	equips     repository.EquipRepo
-	publisher  event.Publisher
-	registry   *behavior.Registry
-	conditions behavior.ConditionChecker
-	now        Clock
+	templates repository.TemplateSource
+	instances instanceStore
+	equips    equipRecords
+	publisher event.Publisher
+	compiler  behavior.Compiler
+	now       Clock
 }
 
 func NewEquipService(
 	templates repository.TemplateSource,
-	instances repository.InstanceRepo,
-	equips repository.EquipRepo,
+	instances instanceStore,
+	equips equipRecords,
 	publisher event.Publisher,
-	registry *behavior.Registry,
-	conditions behavior.ConditionChecker,
+	compiler behavior.Compiler,
 	now Clock,
 ) *EquipService {
 	return &EquipService{
-		templates:  templates,
-		instances:  instances,
-		equips:     equips,
-		publisher:  publisher,
-		registry:   registry,
-		conditions: conditions,
-		now:        now,
+		templates: templates,
+		instances: instances,
+		equips:    equips,
+		publisher: publisher,
+		compiler:  compiler,
+		now:       now,
 	}
 }
 
@@ -132,7 +141,7 @@ func (s *EquipService) Equip(ctx context.Context, owner, instanceID string) erro
 	if err != nil {
 		return err
 	}
-	compiled, err := s.registry.Compile(tpl)
+	compiled, err := s.compiler.Compile(tpl)
 	if err != nil {
 		return err
 	}
@@ -140,8 +149,8 @@ func (s *EquipService) Equip(ctx context.Context, owner, instanceID string) erro
 	if !ok {
 		return ErrNotEquippable
 	}
-	if cond, ok := compiled.Condition(); ok && s.conditions != nil {
-		met, err := s.conditions.Satisfied(ctx, owner, cond)
+	if cond, ok := compiled.Condition(); ok {
+		met, err := cond.Met(ctx, owner)
 		if err != nil {
 			return err
 		}
@@ -239,20 +248,28 @@ func (s *EquipService) loadOwned(ctx context.Context, owner, instanceID string) 
 	return inst, nil
 }
 
+type instanceReader interface {
+	Get(ctx context.Context, id string) (*model.ItemInstance, error)
+}
+
+type equipHistory interface {
+	ListByOwner(ctx context.Context, owner string) ([]model.EquipRecord, error)
+}
+
 type ProfileService struct {
-	instances repository.InstanceRepo
-	equips    repository.EquipRepo
+	instances instanceReader
+	equips    equipHistory
 	templates repository.TemplateSource
-	registry  *behavior.Registry
+	compiler  behavior.Compiler
 	sorts     *SortRegistry
 	now       Clock
 }
 
 func NewProfileService(
-	instances repository.InstanceRepo,
-	equips repository.EquipRepo,
+	instances instanceReader,
+	equips equipHistory,
 	templates repository.TemplateSource,
-	registry *behavior.Registry,
+	compiler behavior.Compiler,
 	sorts *SortRegistry,
 	now Clock,
 ) *ProfileService {
@@ -260,7 +277,7 @@ func NewProfileService(
 		instances: instances,
 		equips:    equips,
 		templates: templates,
-		registry:  registry,
+		compiler:  compiler,
 		sorts:     sorts,
 		now:       now,
 	}
@@ -297,7 +314,7 @@ func (s *ProfileService) Build(ctx context.Context, owner, scene string) (*Snaps
 			Rarity:     tpl.Rarity,
 			EquippedAt: rec.EquippedAt,
 		}
-		if compiled, err := s.registry.Compile(tpl); err == nil {
+		if compiled, err := s.compiler.Compile(tpl); err == nil {
 			if passive, ok := compiled.Passive(); ok {
 				item.Modifiers = append([]model.Modifier(nil), passive.Modifiers...)
 				snap.Modifiers = append(snap.Modifiers, passive.Modifiers...)

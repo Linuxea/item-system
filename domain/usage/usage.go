@@ -31,21 +31,27 @@ type Request struct {
 	Params         map[string]any
 }
 
+type instanceStore interface {
+	Get(ctx context.Context, id string) (*model.ItemInstance, error)
+	Update(ctx context.Context, inst *model.ItemInstance, expectVersion int64) error
+	Delete(ctx context.Context, id string) error
+}
+
 type Service struct {
 	templates   repository.TemplateSource
-	instances   repository.InstanceRepo
+	instances   instanceStore
 	idempotency repository.IdempotencyStore
 	publisher   event.Publisher
-	registry    *behavior.Registry
+	compiler    behavior.Compiler
 	now         Clock
 }
 
 func NewService(
 	templates repository.TemplateSource,
-	instances repository.InstanceRepo,
+	instances instanceStore,
 	idempotency repository.IdempotencyStore,
 	publisher event.Publisher,
-	registry *behavior.Registry,
+	compiler behavior.Compiler,
 	now Clock,
 ) *Service {
 	return &Service{
@@ -53,7 +59,7 @@ func NewService(
 		instances:   instances,
 		idempotency: idempotency,
 		publisher:   publisher,
-		registry:    registry,
+		compiler:    compiler,
 		now:         now,
 	}
 }
@@ -91,7 +97,7 @@ func (s *Service) Use(ctx context.Context, req Request) (*model.UseResult, error
 		s.release(ctx, req.IdempotencyKey)
 		return nil, err
 	}
-	compiled, err := s.registry.Compile(tpl)
+	compiled, err := s.compiler.Compile(tpl)
 	if err != nil {
 		s.release(ctx, req.IdempotencyKey)
 		return nil, err
