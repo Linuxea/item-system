@@ -1,3 +1,7 @@
+// Package catalog 提供九类道具的模板示例集（纯配置数据）。
+// 每类道具都是既有行为组件的组合，验证"新道具 = 数据 + 组合，不改核心"：
+// 座驾（穿戴+被动+等级条件）、勋章（多容量槽）、头饰、VIP（降级链）、
+// 关系卡（关系前置）、飘屏（动态参数）、聊天气泡（场景排序）、铭牌、CP 戒指（绑定+关系前置）。
 package catalog
 
 import (
@@ -6,6 +10,7 @@ import (
 	"github.com/linuxea/item-system/domain/relation"
 )
 
+// Mounts 座驾模板：穿戴进 mount 槽，带移速被动与等级前置条件，7d 款到期即删。
 func Mounts() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -36,6 +41,7 @@ func Mounts() []*model.ItemTemplate {
 	}
 }
 
+// Badges 勋章模板：badge 槽容量 3（多枚并穿），新手勋章限堆叠 1。
 func Badges() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -60,6 +66,7 @@ func Badges() []*model.ItemTemplate {
 	}
 }
 
+// Headwear 头饰模板：穿戴进 headwear 槽，限时款到期仅卸下保留。
 func Headwear() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -79,6 +86,8 @@ func Headwear() []*model.ItemTemplate {
 	}
 }
 
+// VIPs VIP 模板：vip 槽容量 1，月卡到期降级为周卡、周卡降级为 vip0（链式降级），
+// 试用卡到期直接删除。
 func VIPs() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -115,6 +124,8 @@ func VIPs() []*model.ItemTemplate {
 	}
 }
 
+// RelationCards 关系卡模板：穿戴前置为对应类型的生效关系（师徒/闺蜜），
+// 关系解除后由应用层联动卸下。
 func RelationCards() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -135,6 +146,8 @@ func RelationCards() []*model.ItemTemplate {
 	}
 }
 
+// Banners 飘屏模板：可堆叠消耗品，使用时需用户输入文案（param=text，
+// 经物化缝绑定进 BroadcastBanner 命令）。
 func Banners() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -158,6 +171,7 @@ func Banners() []*model.ItemTemplate {
 	}
 }
 
+// ChatBubbles 聊天气泡模板：穿戴进 chat_bubble 槽，限时款到期仅卸下保留。
 func ChatBubbles() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -176,6 +190,7 @@ func ChatBubbles() []*model.ItemTemplate {
 	}
 }
 
+// Nameplates 铭牌模板：穿戴进 nameplate 槽，节日款到期即删。
 func Nameplates() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -195,6 +210,8 @@ func Nameplates() []*model.ItemTemplate {
 	}
 }
 
+// CPRings CP 戒指模板：拾取即绑定，穿戴前置为生效 CP 关系；
+// 由应用层 BindCP 流程成对发放并自动穿戴。
 func CPRings() []*model.ItemTemplate {
 	return []*model.ItemTemplate{
 		{
@@ -218,6 +235,7 @@ func CPRings() []*model.ItemTemplate {
 	}
 }
 
+// All 汇聚全部九类模板，供 NewStack 一键装配演示/测试环境。
 func All() []*model.ItemTemplate {
 	var all []*model.ItemTemplate
 	for _, group := range []func() []*model.ItemTemplate{

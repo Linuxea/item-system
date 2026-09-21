@@ -13,7 +13,7 @@ Race mode matters: repos and the event bus are concurrently accessed. A plain `g
 ## Hard design rules (violations are review-blockers)
 
 - **Domain purity**: `domain/` production code must not import `application`, `infrastructure`, or `catalog`. Tests may (via external test packages, see below).
-- **No comments in code.** Not even doc comments. Self-documenting names only.
+- **Chinese comments required**: every exported identifier gets a godoc comment (中文, starting with the identifier name); key logic (materialization seam, narrow interfaces, CAS versioning) gets inline comments. No commented-out code.
 - **Consumer-side narrow interfaces**: each service declares its own unexported interface for the store methods it uses (e.g. `instanceStore` in `domain/grant`). Never pass the full `repository.InstanceRepo` into a domain service. `application.Deps` may use full provider interfaces — it is the composition root.
 - **Each command owns exactly its own deps**: `effect.Command` structs hold one private port (`BroadcastBanner.banner`, `Condition.checker`), injected via constructor (`NewBroadcastBanner`), called only in `Exec(ctx, owner)`. No god-bundle (no `Runtime`-style struct) may cross a runtime seam; `behavior.Ports` / `application.Deps` exist only at startup wiring.
 - **Commands are complete before execution**: user input binds in `effect.Materialize` (the only place that sees `Params`); missing params fail with zero side effects. Never add params to `Execute`/`Exec` signatures.
