@@ -15,45 +15,57 @@ const (
 
 type Command interface {
 	Kind() string
-	Exec(ctx context.Context, rt Runtime) error
+	Exec(ctx context.Context, owner string) error
 }
 
-type GrantFunc func(ctx context.Context, owner, templateID string, count int64, reason string) error
+type Ledger interface {
+	Add(ctx context.Context, owner, currency string, amount int64) error
+}
 
-type Runtime struct {
-	Owner  string
-	Ledger Ledger
-	Banner BannerBroadcaster
-	Grant  GrantFunc
-	Rand   func(n int64) int64
+type BannerBroadcaster interface {
+	Broadcast(ctx context.Context, owner, text string, duration time.Duration) error
+}
+
+type Granter interface {
+	GrantEffect(ctx context.Context, owner, templateID string, count int64, reason string) error
 }
 
 type AddCurrency struct {
 	Currency string
 	Amount   int64
+	ledger   Ledger
+}
+
+func NewAddCurrency(ledger Ledger, currency string, amount int64) AddCurrency {
+	return AddCurrency{Currency: currency, Amount: amount, ledger: ledger}
 }
 
 func (c AddCurrency) Kind() string { return KindAddCurrency }
 
-func (c AddCurrency) Exec(ctx context.Context, rt Runtime) error {
-	if rt.Ledger == nil {
+func (c AddCurrency) Exec(ctx context.Context, owner string) error {
+	if c.ledger == nil {
 		return nil
 	}
-	return rt.Ledger.Add(ctx, rt.Owner, c.Currency, c.Amount)
+	return c.ledger.Add(ctx, owner, c.Currency, c.Amount)
 }
 
 type GrantItem struct {
 	TemplateID string
 	Count      int64
+	granter    Granter
+}
+
+func NewGrantItem(granter Granter, templateID string, count int64) GrantItem {
+	return GrantItem{TemplateID: templateID, Count: count, granter: granter}
 }
 
 func (c GrantItem) Kind() string { return KindGrantItem }
 
-func (c GrantItem) Exec(ctx context.Context, rt Runtime) error {
-	if rt.Grant == nil {
+func (c GrantItem) Exec(ctx context.Context, owner string) error {
+	if c.granter == nil {
 		return nil
 	}
-	return rt.Grant(ctx, rt.Owner, c.TemplateID, c.Count, KindGrantItem)
+	return c.granter.GrantEffect(ctx, owner, c.TemplateID, c.Count, KindGrantItem)
 }
 
 type RandomEntry struct {
@@ -64,33 +76,39 @@ type RandomEntry struct {
 
 type RandomGrant struct {
 	Entries []RandomEntry
+	granter Granter
+	rand    func(n int64) int64
+}
+
+func NewRandomGrant(granter Granter, rand func(n int64) int64, entries []RandomEntry) RandomGrant {
+	return RandomGrant{Entries: entries, granter: granter, rand: rand}
 }
 
 func (c RandomGrant) Kind() string { return KindRandomGrant }
 
-func (c RandomGrant) Exec(ctx context.Context, rt Runtime) error {
-	if rt.Grant == nil {
+func (c RandomGrant) Exec(ctx context.Context, owner string) error {
+	if c.granter == nil {
 		return nil
 	}
-	entry, ok := c.pick(rt.Rand)
+	entry, ok := c.pick()
 	if !ok {
 		return nil
 	}
-	return rt.Grant(ctx, rt.Owner, entry.TemplateID, entry.Count, KindRandomGrant)
+	return c.granter.GrantEffect(ctx, owner, entry.TemplateID, entry.Count, KindRandomGrant)
 }
 
-func (c RandomGrant) pick(rand func(n int64) int64) (RandomEntry, bool) {
-	if len(c.Entries) == 0 {
+func (c RandomGrant) pick() (RandomEntry, bool) {
+	if len(c.Entries) == 0 || c.rand == nil {
 		return RandomEntry{}, false
 	}
 	var total int64
 	for _, e := range c.Entries {
 		total += e.Weight
 	}
-	if total <= 0 || rand == nil {
+	if total <= 0 {
 		return RandomEntry{}, false
 	}
-	n := rand(total)
+	n := c.rand(total)
 	for _, e := range c.Entries {
 		if n < e.Weight {
 			return e, true
@@ -101,18 +119,23 @@ func (c RandomGrant) pick(rand func(n int64) int64) (RandomEntry, bool) {
 }
 
 type BroadcastBanner struct {
-	Duration time.Duration
 	Text     string
-	ParamKey string
+	Duration time.Duration
+	paramKey string
+	banner   BannerBroadcaster
+}
+
+func NewBroadcastBanner(banner BannerBroadcaster, duration time.Duration, paramKey string) BroadcastBanner {
+	return BroadcastBanner{Duration: duration, paramKey: paramKey, banner: banner}
 }
 
 func (c BroadcastBanner) Kind() string { return KindBroadcastBanner }
 
-func (c BroadcastBanner) Exec(ctx context.Context, rt Runtime) error {
-	if rt.Banner == nil {
+func (c BroadcastBanner) Exec(ctx context.Context, owner string) error {
+	if c.banner == nil {
 		return nil
 	}
-	return rt.Banner.Broadcast(ctx, rt.Owner, c.Text, c.Duration)
+	return c.banner.Broadcast(ctx, owner, c.Text, c.Duration)
 }
 
 type Parametrized interface {
@@ -123,10 +146,10 @@ func (c BroadcastBanner) WithParams(params map[string]any) (Command, error) {
 	if c.Text != "" {
 		return c, nil
 	}
-	if c.ParamKey == "" {
+	if c.paramKey == "" {
 		return nil, ErrMissingParam
 	}
-	text, _ := params[c.ParamKey].(string)
+	text, _ := params[c.paramKey].(string)
 	if text == "" {
 		return nil, ErrMissingParam
 	}
@@ -135,23 +158,6 @@ func (c BroadcastBanner) WithParams(params map[string]any) (Command, error) {
 }
 
 var ErrMissingParam = errors.New("required use param missing")
-
-type BannerBroadcaster interface {
-	Broadcast(ctx context.Context, owner, text string, duration time.Duration) error
-}
-
-type Ledger interface {
-	Add(ctx context.Context, owner, currency string, amount int64) error
-}
-
-func Execute(ctx context.Context, rt Runtime, cmds []Command) error {
-	for _, cmd := range cmds {
-		if err := cmd.Exec(ctx, rt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 func Materialize(cmds []Command, params map[string]any) ([]Command, error) {
 	out := make([]Command, len(cmds))
@@ -168,4 +174,13 @@ func Materialize(cmds []Command, params map[string]any) ([]Command, error) {
 		out[i] = materialized
 	}
 	return out, nil
+}
+
+func Execute(ctx context.Context, owner string, cmds []Command) error {
+	for _, cmd := range cmds {
+		if err := cmd.Exec(ctx, owner); err != nil {
+			return err
+		}
+	}
+	return nil
 }

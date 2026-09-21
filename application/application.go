@@ -23,7 +23,6 @@ type Deps struct {
 	Equips      repository.EquipRepo
 	Idempotency repository.IdempotencyStore
 	Publisher   event.Publisher
-	Registry    *behavior.Registry
 	Ledger      effect.Ledger
 	Banner      effect.BannerBroadcaster
 	Conditions  behavior.ConditionChecker
@@ -35,6 +34,7 @@ type Deps struct {
 }
 
 type App struct {
+	registry    *behavior.Registry
 	deps        Deps
 	GrantSvc    *grant.Service
 	UseSvc      *usage.Service
@@ -46,9 +46,6 @@ type App struct {
 }
 
 func New(deps Deps) *App {
-	if deps.Registry == nil {
-		deps.Registry = behavior.NewRegistry()
-	}
 	if deps.Sorts == nil {
 		deps.Sorts = profile.NewSortRegistry()
 	}
@@ -59,29 +56,24 @@ func New(deps Deps) *App {
 		deps.Rand = rand.Int64N
 	}
 
-	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, deps.NewID, deps.Now)
-	runtime := effect.Runtime{
-		Ledger: deps.Ledger,
-		Banner: deps.Banner,
-		Rand:   deps.Rand,
-		Grant: func(ctx context.Context, owner, templateID string, count int64, reason string) error {
-			_, err := grantSvc.Grant(ctx, grant.Request{
-				Owner:      owner,
-				TemplateID: templateID,
-				Count:      count,
-				Source:     "effect",
-				Reason:     reason,
-			})
-			return err
-		},
-	}
-	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, runtime, deps.Now)
-	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Conditions, deps.Now)
-	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, deps.Registry, deps.Sorts, deps.Now)
-	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Now)
+	granter := &grantAdapter{}
+	registry := behavior.NewRegistry(behavior.Ports{
+		Ledger:  deps.Ledger,
+		Banner:  deps.Banner,
+		Granter: granter,
+		Rand:    deps.Rand,
+	})
+	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, registry, deps.NewID, deps.Now)
+	granter.svc = grantSvc
+
+	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, registry, deps.Now)
+	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, registry, deps.Conditions, deps.Now)
+	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, registry, deps.Sorts, deps.Now)
+	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, registry, deps.Now)
 	relationSvc := relation.NewService(deps.Relations, deps.Publisher, deps.NewID, deps.Now)
 
 	return &App{
+		registry:    registry,
 		deps:        deps,
 		GrantSvc:    grantSvc,
 		UseSvc:      useSvc,
@@ -91,6 +83,24 @@ func New(deps Deps) *App {
 		ExpirySvc:   expirySvc,
 		RelationSvc: relationSvc,
 	}
+}
+
+type grantAdapter struct {
+	svc *grant.Service
+}
+
+func (a *grantAdapter) GrantEffect(ctx context.Context, owner, templateID string, count int64, reason string) error {
+	if a.svc == nil {
+		return nil
+	}
+	_, err := a.svc.Grant(ctx, grant.Request{
+		Owner:      owner,
+		TemplateID: templateID,
+		Count:      count,
+		Source:     "effect",
+		Reason:     reason,
+	})
+	return err
 }
 
 func (a *App) Grant(ctx context.Context, req grant.Request) (*model.GrantResult, error) {
@@ -206,7 +216,7 @@ func (a *App) itemRequiresRelation(ctx context.Context, instanceID string, t rel
 	if err != nil {
 		return false
 	}
-	compiled, err := a.deps.Registry.Compile(tpl)
+	compiled, err := a.registry.Compile(tpl)
 	if err != nil {
 		return false
 	}

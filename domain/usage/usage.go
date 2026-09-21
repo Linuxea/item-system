@@ -37,7 +37,6 @@ type Service struct {
 	idempotency repository.IdempotencyStore
 	publisher   event.Publisher
 	registry    *behavior.Registry
-	runtime     effect.Runtime
 	now         Clock
 }
 
@@ -47,7 +46,6 @@ func NewService(
 	idempotency repository.IdempotencyStore,
 	publisher event.Publisher,
 	registry *behavior.Registry,
-	runtime effect.Runtime,
 	now Clock,
 ) *Service {
 	return &Service{
@@ -56,7 +54,6 @@ func NewService(
 		idempotency: idempotency,
 		publisher:   publisher,
 		registry:    registry,
-		runtime:     runtime,
 		now:         now,
 	}
 }
@@ -114,10 +111,8 @@ func (s *Service) Use(ctx context.Context, req Request) (*model.UseResult, error
 		s.release(ctx, req.IdempotencyKey)
 		return nil, err
 	}
-	rt := s.runtime
-	rt.Owner = req.Owner
 	for i := int64(0); i < req.Count; i++ {
-		if err := effect.Execute(ctx, rt, cmds); err != nil {
+		if err := effect.Execute(ctx, req.Owner, cmds); err != nil {
 			s.release(ctx, req.IdempotencyKey)
 			return nil, err
 		}

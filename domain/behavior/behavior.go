@@ -81,16 +81,26 @@ type ConditionChecker interface {
 
 type Factory func(cfg map[string]any) (Behavior, error)
 
-type Registry struct {
-	factories map[string]Factory
+type Ports struct {
+	Ledger  effect.Ledger
+	Banner  effect.BannerBroadcaster
+	Granter effect.Granter
+	Rand    func(n int64) int64
 }
 
-func NewRegistry() *Registry {
-	r := &Registry{factories: map[string]Factory{}}
+type Registry struct {
+	factories map[string]Factory
+	ports     Ports
+}
+
+func NewRegistry(ports Ports) *Registry {
+	r := &Registry{factories: map[string]Factory{}, ports: ports}
 	r.Register(KeyStackable, stackableFactory)
 	r.Register(KeyExpirable, expirableFactory)
 	r.Register(KeyEquippable, equippableFactory)
-	r.Register(KeyUsable, usableFactory)
+	r.Register(KeyUsable, func(cfg map[string]any) (Behavior, error) {
+		return usableFactory(cfg, r.ports)
+	})
 	r.Register(KeyBindable, bindableFactory)
 	r.Register(KeyPassive, passiveFactory)
 	r.Register(KeyCondition, conditionFactory)
@@ -197,7 +207,7 @@ func equippableFactory(cfg map[string]any) (Behavior, error) {
 	}, nil
 }
 
-func usableFactory(cfg map[string]any) (Behavior, error) {
+func usableFactory(cfg map[string]any, ports Ports) (Behavior, error) {
 	raw, ok := cfg["effects"].([]any)
 	if !ok {
 		return nil, fmt.Errorf("usable requires effects list")
@@ -208,7 +218,7 @@ func usableFactory(cfg map[string]any) (Behavior, error) {
 		if !ok {
 			return nil, fmt.Errorf("effect entry must be a map")
 		}
-		cmd, err := decodeEffect(m)
+		cmd, err := decodeEffect(m, ports)
 		if err != nil {
 			return nil, err
 		}
@@ -217,19 +227,21 @@ func usableFactory(cfg map[string]any) (Behavior, error) {
 	return Usable{Effects: cmds}, nil
 }
 
-func decodeEffect(m map[string]any) (effect.Command, error) {
+func decodeEffect(m map[string]any, ports Ports) (effect.Command, error) {
 	kind := getString(m, "kind", "")
 	switch kind {
 	case effect.KindAddCurrency:
-		return effect.AddCurrency{
-			Currency: getString(m, "currency", ""),
-			Amount:   getInt(m, "amount", 0),
-		}, nil
+		return effect.NewAddCurrency(
+			ports.Ledger,
+			getString(m, "currency", ""),
+			getInt(m, "amount", 0),
+		), nil
 	case effect.KindGrantItem:
-		return effect.GrantItem{
-			TemplateID: getString(m, "template_id", ""),
-			Count:      getInt(m, "count", 1),
-		}, nil
+		return effect.NewGrantItem(
+			ports.Granter,
+			getString(m, "template_id", ""),
+			getInt(m, "count", 1),
+		), nil
 	case effect.KindRandomGrant:
 		raw, ok := m["entries"].([]any)
 		if !ok {
@@ -247,16 +259,17 @@ func decodeEffect(m map[string]any) (effect.Command, error) {
 				Weight:     getInt(em, "weight", 1),
 			})
 		}
-		return effect.RandomGrant{Entries: entries}, nil
+		return effect.NewRandomGrant(ports.Granter, ports.Rand, entries), nil
 	case effect.KindBroadcastBanner:
 		d, err := getDuration(m, "duration")
 		if err != nil {
 			return nil, err
 		}
-		return effect.BroadcastBanner{
-			Duration: d,
-			ParamKey: getString(m, "param", "text"),
-		}, nil
+		return effect.NewBroadcastBanner(
+			ports.Banner,
+			d,
+			getString(m, "param", "text"),
+		), nil
 	default:
 		return nil, fmt.Errorf("unknown effect kind %q", kind)
 	}

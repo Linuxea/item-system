@@ -9,7 +9,7 @@ import (
 )
 
 func TestCompileBuiltins(t *testing.T) {
-	r := behavior.NewRegistry()
+	r := behavior.NewRegistry(behavior.Ports{})
 	tpl := &model.ItemTemplate{
 		ID: "chest",
 		Behaviors: map[string]map[string]any{
@@ -45,7 +45,7 @@ func TestCompileBuiltins(t *testing.T) {
 }
 
 func TestCompileUnknownBehavior(t *testing.T) {
-	r := behavior.NewRegistry()
+	r := behavior.NewRegistry(behavior.Ports{})
 	tpl := &model.ItemTemplate{
 		ID: "broken",
 		Behaviors: map[string]map[string]any{
@@ -58,7 +58,7 @@ func TestCompileUnknownBehavior(t *testing.T) {
 }
 
 func TestCompileInvalidExpiryPolicy(t *testing.T) {
-	r := behavior.NewRegistry()
+	r := behavior.NewRegistry(behavior.Ports{})
 	tpl := &model.ItemTemplate{
 		ID: "bad_expiry",
 		Behaviors: map[string]map[string]any{
