@@ -154,7 +154,12 @@ func (s *Service) downgrade(ctx context.Context, inst *model.ItemInstance, compi
 	if wasEquipped && keepEquipped && targetSlot == currentSlot {
 		inst.Status = model.StatusEquipped
 	}
-	inst.ExpireAt = nil
+	if targetExpirable, ok := targetCompiled.Expirable(); ok && targetExpirable.Duration > 0 {
+		t := s.now().Add(targetExpirable.Duration)
+		inst.ExpireAt = &t
+	} else {
+		inst.ExpireAt = nil
+	}
 	inst.BumpVersion()
 	if err := s.instances.Update(ctx, inst, expect); err != nil {
 		return err

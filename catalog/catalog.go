@@ -77,3 +77,39 @@ func Headwear() []*model.ItemTemplate {
 		},
 	}
 }
+
+func VIPs() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "vip3_month", Category: model.CategoryVIP, Name: "VIP3 Monthly", Priority: 60, Rarity: 4,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotVIP), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "720h", "on_expire": behavior.ExpirePolicyDowngrade, "downgrade_to": "vip1_week"},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "vip_level", "value": float64(3)}}},
+			},
+		},
+		{
+			ID: "vip1_week", Category: model.CategoryVIP, Name: "VIP1 Weekly", Priority: 30, Rarity: 2,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotVIP), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "168h", "on_expire": behavior.ExpirePolicyDowngrade, "downgrade_to": "vip0"},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "vip_level", "value": float64(1)}}},
+			},
+		},
+		{
+			ID: "vip0", Category: model.CategoryVIP, Name: "VIP0 Basic", Priority: 10, Rarity: 1,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotVIP), "capacity": 1},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "vip_level", "value": float64(0)}}},
+			},
+		},
+		{
+			ID: "vip_trial_1d", Category: model.CategoryVIP, Name: "VIP Trial (1d)", Priority: 30, Rarity: 1,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotVIP), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "24h", "on_expire": behavior.ExpirePolicyRemove},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "vip_level", "value": float64(1)}}},
+			},
+		},
+	}
+}
