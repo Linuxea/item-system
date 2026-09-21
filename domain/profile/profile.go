@@ -19,6 +19,7 @@ var (
 	ErrSlotFull         = errors.New("equip slot is full")
 	ErrAlreadyEquipped  = errors.New("item already equipped")
 	ErrNotEquipped      = errors.New("item not equipped")
+	ErrConditionNotMet  = errors.New("equip condition not met")
 )
 
 type Clock func() time.Time
@@ -79,12 +80,13 @@ func DefaultSort(items []DisplayItem) []DisplayItem {
 }
 
 type EquipService struct {
-	templates repository.TemplateSource
-	instances repository.InstanceRepo
-	equips    repository.EquipRepo
-	publisher event.Publisher
-	registry  *behavior.Registry
-	now       Clock
+	templates  repository.TemplateSource
+	instances  repository.InstanceRepo
+	equips     repository.EquipRepo
+	publisher  event.Publisher
+	registry   *behavior.Registry
+	conditions behavior.ConditionChecker
+	now        Clock
 }
 
 func NewEquipService(
@@ -93,15 +95,17 @@ func NewEquipService(
 	equips repository.EquipRepo,
 	publisher event.Publisher,
 	registry *behavior.Registry,
+	conditions behavior.ConditionChecker,
 	now Clock,
 ) *EquipService {
 	return &EquipService{
-		templates: templates,
-		instances: instances,
-		equips:    equips,
-		publisher: publisher,
-		registry:  registry,
-		now:       now,
+		templates:  templates,
+		instances:  instances,
+		equips:     equips,
+		publisher:  publisher,
+		registry:   registry,
+		conditions: conditions,
+		now:        now,
 	}
 }
 
@@ -125,6 +129,15 @@ func (s *EquipService) Equip(ctx context.Context, owner, instanceID string) erro
 	eq, ok := compiled.Equippable()
 	if !ok {
 		return ErrNotEquippable
+	}
+	if cond, ok := compiled.Condition(); ok && s.conditions != nil {
+		met, err := s.conditions.Satisfied(ctx, owner, cond)
+		if err != nil {
+			return err
+		}
+		if !met {
+			return ErrConditionNotMet
+		}
 	}
 
 	records, err := s.equips.ListBySlot(ctx, owner, eq.Slot)

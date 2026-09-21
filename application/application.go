@@ -24,6 +24,7 @@ type Deps struct {
 	Publisher   event.Publisher
 	Registry    *behavior.Registry
 	Ledger      effect.Ledger
+	Conditions  behavior.ConditionChecker
 	Sorts       *profile.SortRegistry
 	NewID       func() string
 	Now         func() time.Time
@@ -57,7 +58,7 @@ func New(deps Deps) *App {
 	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, deps.NewID, deps.Now)
 	executor := newEffectExecutor(grantSvc, deps.Ledger, deps.Rand)
 	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, executor, deps.Now)
-	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Now)
+	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Conditions, deps.Now)
 	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, deps.Registry, deps.Sorts, deps.Now)
 	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Now)
 

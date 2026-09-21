@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/linuxea/item-system/application"
+	"github.com/linuxea/item-system/domain/behavior"
 	"github.com/linuxea/item-system/domain/effect"
 	"github.com/linuxea/item-system/domain/event"
 	"github.com/linuxea/item-system/domain/model"
@@ -272,6 +273,42 @@ func (l *Ledger) Balance(owner, currency string) int64 {
 
 var _ effect.Ledger = (*Ledger)(nil)
 
+type LevelSource struct {
+	mu     sync.Mutex
+	levels map[string]int64
+}
+
+func NewLevelSource() *LevelSource {
+	return &LevelSource{levels: map[string]int64{}}
+}
+
+func (s *LevelSource) SetLevel(owner string, level int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.levels[owner] = level
+}
+
+func (s *LevelSource) Level(owner string) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.levels[owner]
+}
+
+type ConditionChecker struct {
+	Levels *LevelSource
+}
+
+func NewConditionChecker(levels *LevelSource) *ConditionChecker {
+	return &ConditionChecker{Levels: levels}
+}
+
+func (c *ConditionChecker) Satisfied(_ context.Context, owner string, cond behavior.Condition) (bool, error) {
+	if cond.MinLevel > 0 && c.Levels.Level(owner) < cond.MinLevel {
+		return false, nil
+	}
+	return true, nil
+}
+
 type IDGenerator struct {
 	mu     sync.Mutex
 	n      int64
@@ -297,6 +334,7 @@ type Stack struct {
 	Templates   *TemplateSource
 	Equips      *EquipRepo
 	Idempotency *IdempotencyStore
+	Levels      *LevelSource
 }
 
 func NewStack(tpls ...*model.ItemTemplate) *Stack {
@@ -306,6 +344,7 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 	equips := NewEquipRepo()
 	idem := NewIdempotencyStore()
 	ledger := NewLedger()
+	levels := NewLevelSource()
 	app := application.New(application.Deps{
 		Templates:   templates,
 		Instances:   instances,
@@ -313,6 +352,7 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Idempotency: idem,
 		Publisher:   bus,
 		Ledger:      ledger,
+		Conditions:  &ConditionChecker{Levels: levels},
 		NewID:       NewIDGenerator("inst_").Next,
 	})
 	return &Stack{
@@ -323,5 +363,6 @@ func NewStack(tpls ...*model.ItemTemplate) *Stack {
 		Templates:   templates,
 		Equips:      equips,
 		Idempotency: idem,
+		Levels:      levels,
 	}
 }

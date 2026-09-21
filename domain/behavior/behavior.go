@@ -1,6 +1,7 @@
 package behavior
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,6 +16,7 @@ const (
 	KeyUsable     = "usable"
 	KeyBindable   = "bindable"
 	KeyPassive    = "passive"
+	KeyCondition  = "condition"
 )
 
 const (
@@ -66,6 +68,17 @@ type Passive struct {
 
 func (b Passive) Key() string { return KeyPassive }
 
+type Condition struct {
+	MinLevel         int64
+	RequiresRelation string
+}
+
+func (b Condition) Key() string { return KeyCondition }
+
+type ConditionChecker interface {
+	Satisfied(ctx context.Context, owner string, cond Condition) (bool, error)
+}
+
 type Factory func(cfg map[string]any) (Behavior, error)
 
 type Registry struct {
@@ -80,6 +93,7 @@ func NewRegistry() *Registry {
 	r.Register(KeyUsable, usableFactory)
 	r.Register(KeyBindable, bindableFactory)
 	r.Register(KeyPassive, passiveFactory)
+	r.Register(KeyCondition, conditionFactory)
 	return r
 }
 
@@ -124,6 +138,11 @@ func (c *Compiled) Bindable() (Bindable, bool) {
 
 func (c *Compiled) Passive() (Passive, bool) {
 	b, ok := c.behaviors[KeyPassive].(Passive)
+	return b, ok
+}
+
+func (c *Compiled) Condition() (Condition, bool) {
+	b, ok := c.behaviors[KeyCondition].(Condition)
 	return b, ok
 }
 
@@ -255,6 +274,13 @@ func passiveFactory(cfg map[string]any) (Behavior, error) {
 		})
 	}
 	return Passive{Modifiers: mods}, nil
+}
+
+func conditionFactory(cfg map[string]any) (Behavior, error) {
+	return Condition{
+		MinLevel:         getInt(cfg, "min_level", 0),
+		RequiresRelation: getString(cfg, "requires_relation", ""),
+	}, nil
 }
 
 func getInt(cfg map[string]any, key string, def int64) int64 {
