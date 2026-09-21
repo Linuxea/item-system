@@ -15,19 +15,21 @@ const (
 	CategoryHeadwear     Category = "headwear"
 	CategoryRelationCard Category = "relation_card"
 	CategoryCPRing       Category = "cp_ring"
+	CategoryChatBubble   Category = "chat_bubble"
 )
 
 type SlotType string
 
 const (
-	SlotAvatar    SlotType = "avatar"
-	SlotNamePlate SlotType = "nameplate"
-	SlotBadge     SlotType = "badge"
-	SlotVIP       SlotType = "vip"
-	SlotMount     SlotType = "mount"
-	SlotHeadwear  SlotType = "headwear"
-	SlotRelation  SlotType = "relation"
-	SlotCPRing    SlotType = "cp_ring"
+	SlotAvatar     SlotType = "avatar"
+	SlotNamePlate  SlotType = "nameplate"
+	SlotBadge      SlotType = "badge"
+	SlotVIP        SlotType = "vip"
+	SlotMount      SlotType = "mount"
+	SlotHeadwear   SlotType = "headwear"
+	SlotRelation   SlotType = "relation"
+	SlotCPRing     SlotType = "cp_ring"
+	SlotChatBubble SlotType = "chat_bubble"
 )
 
 type InstanceStatus string

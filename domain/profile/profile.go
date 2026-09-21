@@ -79,6 +79,16 @@ func DefaultSort(items []DisplayItem) []DisplayItem {
 	return out
 }
 
+func TopN(n int, inner SortPolicy) SortPolicy {
+	return func(items []DisplayItem) []DisplayItem {
+		sorted := inner(items)
+		if len(sorted) > n {
+			sorted = sorted[:n]
+		}
+		return sorted
+	}
+}
+
 type EquipService struct {
 	templates  repository.TemplateSource
 	instances  repository.InstanceRepo

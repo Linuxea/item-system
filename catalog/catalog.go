@@ -157,3 +157,21 @@ func Banners() []*model.ItemTemplate {
 		},
 	}
 }
+
+func ChatBubbles() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "bubble_star", Category: model.CategoryChatBubble, Name: "Star Bubble", Priority: 45, Rarity: 3,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotChatBubble), "capacity": 1},
+			},
+		},
+		{
+			ID: "bubble_aurora", Category: model.CategoryChatBubble, Name: "Aurora Bubble", Priority: 75, Rarity: 5,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotChatBubble), "capacity": 1},
+				behavior.KeyExpirable:  {"duration": "168h", "on_expire": behavior.ExpirePolicyUnequip},
+			},
+		},
+	}
+}
