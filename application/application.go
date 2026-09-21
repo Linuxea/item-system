@@ -60,8 +60,22 @@ func New(deps Deps) *App {
 	}
 
 	grantSvc := grant.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, deps.NewID, deps.Now)
-	executor := newEffectExecutor(grantSvc, deps.Ledger, deps.Banner, deps.Rand)
-	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, executor, deps.Now)
+	runtime := effect.Runtime{
+		Ledger: deps.Ledger,
+		Banner: deps.Banner,
+		Rand:   deps.Rand,
+		Grant: func(ctx context.Context, owner, templateID string, count int64, reason string) error {
+			_, err := grantSvc.Grant(ctx, grant.Request{
+				Owner:      owner,
+				TemplateID: templateID,
+				Count:      count,
+				Source:     "effect",
+				Reason:     reason,
+			})
+			return err
+		},
+	}
+	useSvc := usage.NewService(deps.Templates, deps.Instances, deps.Idempotency, deps.Publisher, deps.Registry, runtime, deps.Now)
 	equipSvc := profile.NewEquipService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Conditions, deps.Now)
 	profileSvc := profile.NewProfileService(deps.Instances, deps.Equips, deps.Templates, deps.Registry, deps.Sorts, deps.Now)
 	expirySvc := expiry.NewService(deps.Templates, deps.Instances, deps.Equips, deps.Publisher, deps.Registry, deps.Now)
@@ -198,84 +212,4 @@ func (a *App) itemRequiresRelation(ctx context.Context, instanceID string, t rel
 	}
 	cond, ok := compiled.Condition()
 	return ok && cond.RequiresRelation == string(t)
-}
-
-type effectExecutor struct {
-	grants *grant.Service
-	ledger effect.Ledger
-	banner effect.BannerBroadcaster
-	rand   func(n int64) int64
-}
-
-func newEffectExecutor(grants *grant.Service, ledger effect.Ledger, banner effect.BannerBroadcaster, rand func(n int64) int64) effect.Executor {
-	return &effectExecutor{grants: grants, ledger: ledger, banner: banner, rand: rand}
-}
-
-func (e *effectExecutor) Execute(ctx context.Context, owner string, cmds []effect.Command) error {
-	for _, cmd := range cmds {
-		if err := e.exec(ctx, owner, cmd); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (e *effectExecutor) exec(ctx context.Context, owner string, cmd effect.Command) error {
-	switch c := cmd.(type) {
-	case effect.AddCurrency:
-		if e.ledger == nil {
-			return nil
-		}
-		return e.ledger.Add(ctx, owner, c.Currency, c.Amount)
-	case effect.GrantItem:
-		_, err := e.grants.Grant(ctx, grant.Request{
-			Owner:      owner,
-			TemplateID: c.TemplateID,
-			Count:      c.Count,
-			Source:     "effect",
-			Reason:     effect.KindGrantItem,
-		})
-		return err
-	case effect.RandomGrant:
-		entry, ok := e.pick(c.Entries)
-		if !ok {
-			return nil
-		}
-		_, err := e.grants.Grant(ctx, grant.Request{
-			Owner:      owner,
-			TemplateID: entry.TemplateID,
-			Count:      entry.Count,
-			Source:     "effect",
-			Reason:     effect.KindRandomGrant,
-		})
-		return err
-	case effect.BroadcastBanner:
-		if e.banner == nil {
-			return nil
-		}
-		return e.banner.Broadcast(ctx, owner, c.Text, c.Duration)
-	default:
-		return nil
-	}
-}
-
-func (e *effectExecutor) pick(entries []effect.RandomEntry) (effect.RandomEntry, bool) {
-	if len(entries) == 0 {
-		return effect.RandomEntry{}, false
-	}
-	var total int64
-	for _, en := range entries {
-		total += en.Weight
-	}
-	if total <= 0 {
-		return effect.RandomEntry{}, false
-	}
-	n := e.rand(total)
-	for _, en := range entries {
-		if n < en.Weight {
-			return en, true
-		}
-		n -= en.Weight
-	}
-	return entries[len(entries)-1], true
 }
