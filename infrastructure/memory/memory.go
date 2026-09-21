@@ -55,7 +55,7 @@ func (r *InstanceRepo) Save(_ context.Context, inst *model.ItemInstance) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.instances[inst.ID]; exists {
-		return &repository.ErrNotFound{Entity: "duplicate instance " + inst.ID}
+		return &repository.ErrConflict{Entity: "instance " + inst.ID}
 	}
 	cp := *inst
 	r.instances[inst.ID] = &cp
@@ -343,7 +343,7 @@ func (r *RelationRepo) Save(_ context.Context, rel *relation.Relation) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.relations[rel.ID]; exists {
-		return &repository.ErrNotFound{Entity: "duplicate relation " + rel.ID}
+		return &repository.ErrConflict{Entity: "relation " + rel.ID}
 	}
 	cp := *rel
 	r.relations[rel.ID] = &cp

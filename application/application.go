@@ -34,7 +34,7 @@ type Deps struct {
 }
 
 type App struct {
-	registry    *behavior.Registry
+	compiler    behavior.Compiler
 	deps        Deps
 	GrantSvc    *grant.Service
 	UseSvc      *usage.Service
@@ -74,7 +74,7 @@ func New(deps Deps) *App {
 	relationSvc := relation.NewService(deps.Relations, deps.Publisher, deps.NewID, deps.Now)
 
 	return &App{
-		registry:    registry,
+		compiler:    registry,
 		deps:        deps,
 		GrantSvc:    grantSvc,
 		UseSvc:      useSvc,
@@ -217,7 +217,7 @@ func (a *App) itemRequiresRelation(ctx context.Context, instanceID string, t rel
 	if err != nil {
 		return false
 	}
-	compiled, err := a.registry.Compile(tpl)
+	compiled, err := a.compiler.Compile(tpl)
 	if err != nil {
 		return false
 	}

@@ -37,6 +37,10 @@ type ErrNotFound struct{ Entity string }
 
 func (e *ErrNotFound) Error() string { return e.Entity + " not found" }
 
+type ErrConflict struct{ Entity string }
+
+func (e *ErrConflict) Error() string { return e.Entity + " already exists" }
+
 type ErrVersionConflict struct{ Entity string }
 
 func (e *ErrVersionConflict) Error() string { return e.Entity + " version conflict" }
