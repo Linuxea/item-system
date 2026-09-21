@@ -194,3 +194,36 @@ func Nameplates() []*model.ItemTemplate {
 		},
 	}
 }
+
+func CPRings() []*model.ItemTemplate {
+	return []*model.ItemTemplate{
+		{
+			ID: "ring_cp_diamond", Category: model.CategoryCPRing, Name: "CP Diamond Ring", Priority: 95, Rarity: 5,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotCPRing), "capacity": 1},
+				behavior.KeyCondition:  {"requires_relation": string(relation.TypeCP)},
+				behavior.KeyPassive:    {"modifiers": []any{map[string]any{"key": "cp_badge", "value": "diamond"}}},
+				behavior.KeyBindable:   {"bind_on_pickup": true},
+			},
+		},
+		{
+			ID: "ring_cp_gold", Category: model.CategoryCPRing, Name: "CP Gold Ring (30d)", Priority: 78, Rarity: 3,
+			Behaviors: map[string]map[string]any{
+				behavior.KeyEquippable: {"slot": string(model.SlotCPRing), "capacity": 1},
+				behavior.KeyCondition:  {"requires_relation": string(relation.TypeCP)},
+				behavior.KeyExpirable:  {"duration": "720h", "on_expire": behavior.ExpirePolicyRemove},
+				behavior.KeyBindable:   {"bind_on_pickup": true},
+			},
+		},
+	}
+}
+
+func All() []*model.ItemTemplate {
+	var all []*model.ItemTemplate
+	for _, group := range []func() []*model.ItemTemplate{
+		Mounts, Badges, Headwear, VIPs, RelationCards, Banners, ChatBubbles, Nameplates, CPRings,
+	} {
+		all = append(all, group()...)
+	}
+	return all
+}

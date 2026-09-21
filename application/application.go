@@ -107,6 +107,34 @@ func (a *App) BindRelation(ctx context.Context, t relation.Type, partyA, partyB 
 	return a.RelationSvc.Bind(ctx, t, partyA, partyB, expireAt)
 }
 
+func (a *App) BindCP(ctx context.Context, partyA, partyB, ringTemplateID string) (*relation.Relation, error) {
+	rel, err := a.RelationSvc.Bind(ctx, relation.TypeCP, partyA, partyB, nil)
+	if err != nil {
+		return nil, err
+	}
+	for i, party := range []string{partyA, partyB} {
+		r, err := a.GrantSvc.Grant(ctx, grant.Request{
+			Owner:          party,
+			TemplateID:     ringTemplateID,
+			Count:          1,
+			Source:         "relation",
+			Reason:         "bind_cp",
+			IdempotencyKey: rel.ID + ":ring:" + string(rune('a'+i)),
+		})
+		if err != nil {
+			return rel, err
+		}
+		if err := a.EquipSvc.Equip(ctx, party, r.InstanceID); err != nil {
+			return rel, err
+		}
+	}
+	return rel, nil
+}
+
+func (a *App) DissolveCP(ctx context.Context, relationID string) error {
+	return a.DissolveRelation(ctx, relationID)
+}
+
 func (a *App) DissolveRelation(ctx context.Context, id string) error {
 	rel, err := a.deps.Relations.Get(ctx, id)
 	if err != nil {
