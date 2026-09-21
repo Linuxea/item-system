@@ -109,8 +109,13 @@ func (s *Service) Use(ctx context.Context, req Request) (*model.UseResult, error
 		return nil, ErrInsufficient
 	}
 
+	cmds, err := effect.Materialize(usable.Effects, req.Params)
+	if err != nil {
+		s.release(ctx, req.IdempotencyKey)
+		return nil, err
+	}
 	for i := int64(0); i < req.Count; i++ {
-		if err := s.executor.Execute(ctx, req.Owner, req.Params, usable.Effects); err != nil {
+		if err := s.executor.Execute(ctx, req.Owner, cmds); err != nil {
 			s.release(ctx, req.IdempotencyKey)
 			return nil, err
 		}

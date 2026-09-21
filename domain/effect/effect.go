@@ -44,11 +44,31 @@ type RandomGrant struct {
 func (c RandomGrant) Kind() string { return KindRandomGrant }
 
 type BroadcastBanner struct {
-	Duration  time.Duration
-	TextParam string
+	Duration time.Duration
+	Text     string
+	ParamKey string
 }
 
 func (c BroadcastBanner) Kind() string { return KindBroadcastBanner }
+
+type Parametrized interface {
+	WithParams(params map[string]any) (Command, error)
+}
+
+func (c BroadcastBanner) WithParams(params map[string]any) (Command, error) {
+	if c.Text != "" {
+		return c, nil
+	}
+	if c.ParamKey == "" {
+		return nil, ErrMissingParam
+	}
+	text, _ := params[c.ParamKey].(string)
+	if text == "" {
+		return nil, ErrMissingParam
+	}
+	c.Text = text
+	return c, nil
+}
 
 var ErrMissingParam = errors.New("required use param missing")
 
@@ -61,5 +81,22 @@ type Ledger interface {
 }
 
 type Executor interface {
-	Execute(ctx context.Context, owner string, params map[string]any, cmds []Command) error
+	Execute(ctx context.Context, owner string, cmds []Command) error
+}
+
+func Materialize(cmds []Command, params map[string]any) ([]Command, error) {
+	out := make([]Command, len(cmds))
+	for i, cmd := range cmds {
+		p, ok := cmd.(Parametrized)
+		if !ok {
+			out[i] = cmd
+			continue
+		}
+		materialized, err := p.WithParams(params)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = materialized
+	}
+	return out, nil
 }

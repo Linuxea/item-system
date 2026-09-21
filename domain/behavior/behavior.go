@@ -254,8 +254,8 @@ func decodeEffect(m map[string]any) (effect.Command, error) {
 			return nil, err
 		}
 		return effect.BroadcastBanner{
-			Duration:  d,
-			TextParam: getString(m, "param", "text"),
+			Duration: d,
+			ParamKey: getString(m, "param", "text"),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown effect kind %q", kind)

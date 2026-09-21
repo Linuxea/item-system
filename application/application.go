@@ -211,16 +211,16 @@ func newEffectExecutor(grants *grant.Service, ledger effect.Ledger, banner effec
 	return &effectExecutor{grants: grants, ledger: ledger, banner: banner, rand: rand}
 }
 
-func (e *effectExecutor) Execute(ctx context.Context, owner string, params map[string]any, cmds []effect.Command) error {
+func (e *effectExecutor) Execute(ctx context.Context, owner string, cmds []effect.Command) error {
 	for _, cmd := range cmds {
-		if err := e.exec(ctx, owner, params, cmd); err != nil {
+		if err := e.exec(ctx, owner, cmd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *effectExecutor) exec(ctx context.Context, owner string, params map[string]any, cmd effect.Command) error {
+func (e *effectExecutor) exec(ctx context.Context, owner string, cmd effect.Command) error {
 	switch c := cmd.(type) {
 	case effect.AddCurrency:
 		if e.ledger == nil {
@@ -250,14 +250,10 @@ func (e *effectExecutor) exec(ctx context.Context, owner string, params map[stri
 		})
 		return err
 	case effect.BroadcastBanner:
-		text, _ := params[c.TextParam].(string)
-		if text == "" {
-			return effect.ErrMissingParam
-		}
 		if e.banner == nil {
 			return nil
 		}
-		return e.banner.Broadcast(ctx, owner, text, c.Duration)
+		return e.banner.Broadcast(ctx, owner, c.Text, c.Duration)
 	default:
 		return nil
 	}
