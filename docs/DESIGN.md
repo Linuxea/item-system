@@ -27,7 +27,165 @@ infrastructure ──────── memory（完整仓储实现，供测试�
 catalog ─────────────── 9 类道具模板示例集（纯配置数据）
 ```
 
-## 2. 演进阶段
+## 2. 接口依赖关系图（解耦视角）
+
+### 图 0 · 分层依赖与依赖倒置
+
+实线 = 编译期依赖（全部指向 domain 内声明的抽象）；虚线 = 运行期实现绑定（只在装配点发生）。
+关键：**domain 没有任何箭头指向 infrastructure**——不是自觉，是编译器禁止（domain 不 import infra）。
+
+```mermaid
+flowchart TB
+    API["gRPC / GM / 业务服务<br/>（未来接入门）"]
+
+    subgraph APP["application · 装配点"]
+        NEW["application.New"]
+        GA["grantAdapter<br/>（打破 Grant ⇄ Registry 循环）"]
+    end
+
+    subgraph DOM["domain · 纯领域"]
+        SVC["grant / usage / equip<br/>profile / expiry / relation"]
+        BEH["behavior.Registry<br/>（Compiler 窄接口 + Ports）"]
+        EFF["effect.Command 家族<br/>（自带依赖与物化规则）"]
+        EVT["event.Publisher"]
+    end
+
+    subgraph INFRA["infrastructure · 提供方"]
+        MEM["memory 仓储 / EventBus<br/>Ledger / BannerRecorder / LevelSource"]
+    end
+
+    API --> NEW
+    NEW -->|"编译期：只依赖 domain 抽象"| SVC
+    SVC --> BEH
+    SVC --> EFF
+    SVC --> EVT
+    MEM -.->|"结构化类型自动满足 domain 窄接口<br/>（依赖倒置：infra 适配 domain）"| SVC
+    NEW -.->|"运行期：注入具体实现"| MEM
+    GA -.-> BEH
+```
+
+### 图 1 · 消费侧窄接口：同一个仓储，每个服务只看见自己的切片
+
+提供方实现 6 个方法；每个消费者在**自己包里**声明未导出窄接口，用到几个声明几个。想调用切片外的方法，编译不过——解耦由类型系统强制，不靠 review 纪律。
+
+```mermaid
+flowchart LR
+    subgraph PROVIDER["提供方 memory.InstanceRepo"]
+        M["Save · Get · ListByOwner · Update · Delete · ListExpired"]
+    end
+
+    G["grant.Service"] -->|"instanceStore:<br/>ListByOwner / Save / Update"| M
+    U["usage.Service"] -->|"instanceStore:<br/>Get / Update / Delete"| M
+    E["expiry.Service"] -->|"instanceStore:<br/>Update / Delete / ListExpired"| M
+    Q["profile.EquipService"] -->|"instanceStore:<br/>Get / Update"| M
+    R["profile.ProfileService"] -->|"instanceReader:<br/>Get（只读，写方法不可见）"| M
+
+    C["所有服务"] -->|"behavior.Compiler:<br/>只看见 Compile 一个方法"| REG["behavior.Registry"]
+```
+
+### 图 2 · 效果命令：数据与依赖各归其主
+
+接口只有两个方法且永不增长；每个命令私有持有**自己那一个**端口，新增效果 = 新增 struct，零中央修改。
+
+```mermaid
+classDiagram
+    class Command {
+        <<interface>>
+        +Kind() string
+        +Exec(ctx, owner) error
+    }
+    class Parametrized {
+        <<interface>>
+        +WithParams(params) Command
+    }
+    class AddCurrency {
+        +Currency string
+        +Amount int64
+        -ledger Ledger
+    }
+    class GrantItem {
+        +TemplateID string
+        +Count int64
+        -granter Granter
+    }
+    class RandomGrant {
+        +Entries list
+        -granter Granter
+        -rand func
+    }
+    class BroadcastBanner {
+        +Text string
+        +Duration dur
+        -banner BannerBroadcaster
+    }
+    class Condition {
+        +MinLevel int64
+        +RequiresRelation string
+        -checker ConditionChecker
+        +Met(ctx, owner) bool
+    }
+
+    Command <|.. AddCurrency
+    Command <|.. GrantItem
+    Command <|.. RandomGrant
+    Command <|.. BroadcastBanner
+    Parametrized <|.. BroadcastBanner
+
+    note for BroadcastBanner "数据字段 = 做什么<br/>私有依赖 = 拿什么做<br/>构造时注入，Exec 时使用"
+    note for Condition "条件组件自己会判断<br/>EquipService 不代劳"
+```
+
+### 图 3 · 使用时序：接缝两侧的不变量
+
+用户输入止步于物化缝；执行缝只接收"已完整"的命令；命令只调自己的端口。缺参数在任何副作用发生前失败。
+
+```mermaid
+sequenceDiagram
+    participant C as 调用方
+    participant U as usage.Service
+    participant M as effect.Materialize
+    participant K as BroadcastBanner 命令
+    participant B as BannerBroadcaster 端口
+    participant S as InstanceRepo 切片
+
+    C->>U: Use Request + Params text
+    U->>U: 幂等 Claim → 归属/状态/数量校验
+    U->>M: Materialize cmds, params
+    alt 参数缺失
+        M-->>U: ErrMissingParam（零副作用，幂等键释放）
+    else 命令完整
+        M-->>U: 完整命令列表
+        U->>K: Exec ctx, owner
+        K->>B: Broadcast owner, Text, Duration
+        Note over K,B: 命令只认识自己的端口<br/>不知道 infra 存在
+        U->>S: 扣减 Update（版本 CAS）
+        U->>U: 发布 ItemConsumed 事件
+    end
+```
+
+### 图 4 · 装配点与热路径分离：bundle 的唯一居所
+
+全量依赖（Ports）只在启动时存在一次，把端口分发给各组件的构造函数；之后热路径上每次调用只携带 `(ctx, owner)`——不存在任何"工具箱"穿越接缝。
+
+```mermaid
+flowchart LR
+    subgraph STARTUP["启动 · 一次性装配"]
+        D["application.Deps<br/>（全量依赖唯一居所）"] --> P["behavior.Ports"]
+        P -->|Ledger| A["AddCurrency"]
+        P -->|Banner| B["BroadcastBanner"]
+        P -->|Granter + Rand| G["GrantItem / RandomGrant"]
+        P -->|Conditions| CD["Condition.Met"]
+    end
+
+    subgraph HOTPATH["运行期 · 每次使用"]
+        S["usage.Service"] --> MAT["Materialize"] --> CMD["完整命令"]
+        CMD --> EX["Exec ctx, owner"]
+    end
+
+    STARTUP -.->|"依赖已在构造时带入<br/>热路径零 bundle 透传"| EX
+```
+
+## 3. 演进阶段
 
 ### 阶段一：初始内核（`401396f`）
 
@@ -100,7 +258,7 @@ func (c BroadcastBanner) Exec(ctx context.Context, owner string) error
 
 依赖分发只发生在**启动装配点**（`behavior.Ports` 只在 `NewRegistry` 存在一次，从不进入任何一次调用）；`Condition.Met(ctx, owner)` 让条件组件自己判断（不再由 EquipService 代劳）；所有领域服务改用**消费侧窄接口**（grant 只见 `ListByOwner/Save/Update`，profile 快照连写方法都看不见）。
 
-## 3. 设计原则与代码对照
+## 4. 设计原则与代码对照
 
 | 原则 | 落点 |
 |---|---|
@@ -114,7 +272,7 @@ func (c BroadcastBanner) Exec(ctx context.Context, owner string) error
 | 端口模式（依赖倒置） | Ledger/BannerBroadcaster/Granter/ConditionChecker 由领域声明，infra 实现 |
 | 领域纯度 | domain 不 import application/infrastructure/catalog（生产代码） |
 
-## 4. 代价复盘
+## 5. 代价复盘
 
 | 事项 | commits | 备注 |
 |---|---|---|
@@ -125,7 +283,7 @@ func (c BroadcastBanner) Exec(ctx context.Context, owner string) error
 
 教训：初始设计预测了约八成演进；预测不了的（双主体关系、动态参数），因为组合内核的存在，每次修正的代价是"新增模块"而非"重写核心"。**模块化设计的价值不是未卜先知，而是让每次'没想到'只值一个新文件。**
 
-## 5. 已知边界与后续方向
+## 6. 已知边界与后续方向
 
 - 存储仅有内存实现；MySQL（模板表/实例表/条件更新）与 Redis（背包缓存/过期 ZSet 调度）按 `repository` 提供方接口接入
 - 对方同意流程（关系建立）、VIP 每日定时特权、座驾进阶养成线未纳入 v1
