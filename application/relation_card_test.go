@@ -81,8 +81,9 @@ func TestRelationCardDissolveAutoUnequips(t *testing.T) {
 func TestRelationExpiryAutoUnequips(t *testing.T) {
 	ctx := context.Background()
 	app, s, clock := relStack(t)
+	s.Relations.UseClock(func() time.Time { return *clock })
 
-	expireAt := clock.Add(-time.Minute)
+	expireAt := clock.Add(time.Minute)
 	rel, err := app.BindRelation(ctx, relation.TypeBestie, "p1", "p2", &expireAt)
 	if err != nil {
 		t.Fatalf("bind: %v", err)
@@ -92,6 +93,7 @@ func TestRelationExpiryAutoUnequips(t *testing.T) {
 		t.Fatalf("equip: %v", err)
 	}
 
+	*clock = clock.Add(2 * time.Minute)
 	if n, err := app.RunRelationExpiry(ctx, 10); err != nil || n != 1 {
 		t.Fatalf("relation expiry: n=%d err=%v", n, err)
 	}

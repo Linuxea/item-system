@@ -298,10 +298,17 @@ func (s *LevelSource) Level(owner string) int64 {
 type RelationRepo struct {
 	mu        sync.Mutex
 	relations map[string]*relation.Relation
+	now       func() time.Time
 }
 
 func NewRelationRepo() *RelationRepo {
-	return &RelationRepo{relations: map[string]*relation.Relation{}}
+	return &RelationRepo{relations: map[string]*relation.Relation{}, now: time.Now}
+}
+
+func (r *RelationRepo) UseClock(now func() time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.now = now
 }
 
 func (r *RelationRepo) Save(_ context.Context, rel *relation.Relation) error {
@@ -329,7 +336,7 @@ func (r *RelationRepo) Get(_ context.Context, id string) (*relation.Relation, er
 func (r *RelationRepo) FindActive(_ context.Context, owner string, t relation.Type) (*relation.Relation, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := r.now()
 	for _, rel := range r.relations {
 		if rel.Type == t && rel.Status == relation.StatusActive && rel.Involves(owner) && !rel.Expired(now) {
 			cp := *rel
