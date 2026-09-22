@@ -1,9 +1,3 @@
-bin/
-dist/
 *.test
 *.out
-coverage.*
-.idea/
-.vscode/
-*.log
-.env
+/bin/

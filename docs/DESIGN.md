@@ -1,122 +1,221 @@
-# 道具子系统设计（v2：显式类型）
+# 设计说明
 
-本文档描述 item-system v2 的设计。v1（tag `v1.0.0`，见 git 历史）是一套
-"行为组件配置表 + 效果命令物化"的数据驱动架构；v2 按明确的产品判断将其推翻：
-**道具系统不需要运行时配置驱动，不需要"不停机上新道具"。所有道具种类都编译进代码，
-所以最清晰的表达就是面向对象多态——每种道具一个 Go 类型，行为写在类型的方法里。**
+这份文档解释**为什么这么写**。想快速上手看 [README](../README.md)，想看代码从 `item/item.go` 开始。
 
-## 1. 核心模型
+## 1. 核心主张
+
+> 一个道具「有什么能力」，由它「实现了哪些接口」决定。
+
+这句话有两个对立面，先说清楚不选它们的原因。
+
+**对立面一：继承树。**
+
+```
+Item
+ ├── EquippableItem
+ │    ├── Mount
+ │    └── Badge
+ └── ConsumableItem
+      └── BannerCard
+```
+
+问题在于一旦出现「CP 戒指既可穿戴、又要绑定、又有关系前置」这种组合，树就打结了：
+要不要造一个 `BindableConditionalEquippableItem`？能力有 8 项，组合有 2^8 种，
+继承树最多只能表达其中一条路径。
+
+**对立面二：配置驱动。**
 
 ```go
-// 每种道具 = 一个显式类型。行为是方法，标签数据内嵌 item.Common。
-type RenameCard struct {
-    item.Common                  // ID/Name/Priority/Rarity/MaxStack/Bind
-    Users  RenameService         // 道具自己持有外部依赖，构造方注入
+Behaviors: map[string]map[string]any{
+    "equippable": {"slot": "mount", "capacity": 1},
+    "passive":    {"modifiers": [...]},
 }
+```
 
-func (c *RenameCard) Use(ctx context.Context, inv *item.Inventory, owner string, params map[string]any) error {
-    newName, _ := params["new_name"].(string)
-    if newName == "" { return item.ErrMissingParam }   // 副作用前校验
-    return c.Users.Rename(ctx, owner, newName)         // 业务逻辑直接调用外部服务
+这是游戏行业的标准做法，它换来一个很值钱的能力：**运营后台不发版就能上新道具**。
+但代价也实在——`map[string]any` 没有类型安全（`"equipable"` 拼错编译器不吭声，
+运行时才炸）、IDE 跳不动（想看座驾怎么工作，得在配置、注册表、组件、服务之间来回翻）、
+调试链路变长。
+
+**本库不需要那个能力**，所以不付那笔代价。用接口表达能力，编译期确定，
+换来类型安全、可跳转、可重构。代价是上新道具要发版——已知且接受。
+
+## 2. 引擎与道具的分工
+
+引擎负责**所有道具共有的那部分**：
+
+- 实例的数量、绑定、穿戴状态
+- 乐观锁（CAS）与幂等
+- 堆叠合并
+- 时效计算与到期扫描
+- 槽位容量
+- 展示快照的聚合与排序
+- 领域事件
+
+道具负责**只有它自己知道的那部分**：
+
+- 「用了会发生什么」（`Use`）
+- 「参数长什么样、怎么校验」（`Bind`）
+- 「能不能穿」（`CanEquip`）
+- 「给什么属性」（`Modifiers`）
+
+两者的接缝就是 `item` 包里那 8 个接口。引擎在需要分支的地方问一句：
+
+```go
+st, ok := it.(item.Stackable)     // 发放时：能堆叠吗？
+u,  ok := it.(item.Usable)        // 使用时：能用吗？
+eq, ok := it.(item.Equippable)    // 穿戴时：能穿吗？穿哪儿？
+c,  ok := it.(item.Conditional)   // 穿戴时：有前置条件吗？
+p,  ok := it.(item.Passive)       // 快照时：有被动属性吗？
+ex, ok := it.(item.Expirable)     // 过期时：怎么处置？
+d,  ok := it.(item.Downgradable)  // 降级时：降成哪款？
+b,  ok := it.(item.Bindable)      // 发放时：要绑定吗？
+```
+
+全部的分支就这 8 处。`engine` 包里找不到任何一个具体道具的名字。
+
+## 3. 参数为什么放在道具结构体里
+
+需求：飘屏卡的文案、改名卡的新昵称，要在**使用时**由玩家输入。
+
+一个常见的做法是让参数穿过接口：
+
+```go
+Use(ctx, owner string, params map[string]any) error
+```
+
+不这么做的原因是：`params` 是个什么都能塞的口袋。每个道具都得自己从里面掏、
+自己判类型、自己处理缺失，而且**编译器帮不上任何忙**。加一个参数不改签名，
+少传一个参数也不报错。
+
+本库的做法是**参数就是道具结构体的公开字段**：
+
+```go
+type BannerCard struct {
+    Text string `json:"text"`   // 参数
+
+    seconds     int             // 配置（构造时定死）
+    broadcaster port.Broadcaster // 依赖（构造时注入）
 }
+```
 
+注册表里存的是**原型**：`Text` 为空，只带依赖。使用时引擎调 `Bind`：
+
+```go
+func (c *BannerCard) Bind(raw []byte) (item.Usable, error) {
+    bound := *c                        // 复制原型，依赖一并带过来
+    if err := bindJSON(raw, &bound); err != nil {
+        return nil, err
+    }
+    if strings.TrimSpace(bound.Text) == "" {
+        return nil, fmt.Errorf("%w: text", item.ErrMissingParam)
+    }
+    return &bound, nil
+}
+```
+
+得到一个填好参数的副本，原型分毫不动——多个玩家同时用飘屏卡，各拿各的副本，天然并发安全。
+
+`Use` 的签名里因此没有任何参数容器：
+
+```go
+func (c *BannerCard) Use(ctx context.Context, owner string) error {
+    return c.broadcaster.Broadcast(ctx, owner, c.Text, c.seconds)
+}
+```
+
+**校验写在 `Bind` 里，而 `Bind` 发生在任何副作用之前。** 参数不合法时引擎还没扣任何东西，
+玩家不会白损失一张卡。这个不变量靠的是调用顺序，不需要任何中央机制来保证。
+
+唯一没能消掉的动态成分是 `Bind` 的入参 `[]byte`——它是 API 边界传进来的原始 JSON。
+但解码发生在道具**自己的文件里**，解进的是**自己的字段**，这和「一个全局 params map
+在整个系统里穿来穿去」是两回事。
+
+## 4. 使用为什么「先扣减，后执行」
+
+`engine/use.go` 的顺序是：
+
+```
+校验与参数绑定   ← 零副作用
+CAS 预扣        ← 并发闸门
+执行道具逻辑     ← 真正的副作用
+失败则补偿回滚
+```
+
+反过来（先执行后扣减）有一个真实的并发漏洞：两个请求同时读到 `Count = 1`，
+都通过数量校验，都执行了一遍效果，然后其中一个扣减时才发现版本冲突。
+**道具被用了两次，只扣了一次。**
+
+把 CAS 扣减提到执行之前，它就成了闸门：只有一个请求能扣成功，另一个直接拿到版本冲突，
+根本走不到执行那一步。代价是执行失败时要补偿回滚，这段逻辑写在同一个函数里，
+回滚失败会如实上报（那是需要人工介入的状态，不该被吞掉）。
+
+`memory/grant_use_test.go` 里的 `TestConcurrentUseDeductsExactlyOnce` 用 8 个
+goroutine 抢一张改名卡，断言恰好 1 成功 7 失败。
+
+## 5. 三个环是怎么解开的
+
+装配时有三处循环依赖，都用「先造空壳、后回注」解决：
+
+**环一：宝箱 → 发放器 → 引擎 → 宝箱**
+
+宝箱要发奖品，发奖品就是引擎的 `Grant`，而引擎要先有全部道具才能构造。
+`engine.LateGranter` 先造一个空壳交给宝箱，引擎构造完再 `Bind(eng)`。
+
+**环二：关系卡 → 关系服务 → 引擎 → 关系卡**
+
+关系解除时要联动卸下道具，那是引擎的 `UnequipSlot`。
+`relation.Service.BindUnequipper(eng)` 同理。
+
+**环三（不存在的那个）：引擎 → 关系**
+
+引擎完全不知道「关系」是什么。CP 戒指自己嵌入 `relationGate` 片段、
+自己去问 `port.RelationChecker`，引擎照旧只调一个 `CanEquip`。
+这个环根本没形成，因为职责切对了。
+
+装配的完整顺序见 `memory/stack.go` 的 `NewStack`——那是全程序唯一一处「全量依赖」
+出现的地方。之后运行期的每次调用都只带 `(ctx, owner)`。
+
+## 6. 能力片段：Go 的组合
+
+`items/fragments.go` 里有几个可嵌入的小结构体：
+
+```go
+type wearable struct {
+    slot     item.Slot
+    capacity int
+}
+func (w wearable) Slot() item.Slot { return w.slot }
+func (w wearable) Capacity() int   { return w.capacity }
+```
+
+道具嵌入它就自动实现了 `item.Equippable`，不用每个道具重写一遍访问器。
+
+```go
 type Mount struct {
-    item.Common
-    Speed    int
-    MinLevel int64
-    Levels   LevelSource             // CanEquip 自己查等级，通用层不代劳
-    Duration time.Duration           // 0 = 永久；限时款只是不同的构造值
+    identity
+    display
+    wearable
+    levelGate
+    timed
+    speed int64
 }
 ```
 
-- **同款不同配置 = 不同构造值**：`&Mount{Speed: 80}`（云朵）vs `&Mount{Speed: 150}`（龙车）。
-- **新道具 = 新类型 + 实现想要的能力接口 + 注册一行**。不需要的能力就不实现，
-  通用层 `def.(Usable)` 断言自然跳过。
+一眼看出座驾有哪些能力。这就是配置表 `Behaviors: {...}` 的编译期版本——
+表达力相同，但拼错名字编译不过。
 
-## 2. 分层
+`timed` 有个顺手的性质：`duration` 为 0 时引擎不给实例设到期时间，等同于永久。
+所以「有的座驾限时、有的永久」不需要两个类型，构造时传不同的 `duration` 即可。
 
-```
-event/       事件接口 + Publisher（item 与 relation 共享的词汇）
-relation/    双主体关系：模型 + Repo 接口 + 关系事件（纯模型，无服务）
-item/
-  def.go         Def 基础接口 + Common 公共数据 + 可选能力接口
-  model.go       实例/槽位/状态/修饰符/穿戴记录/过期策略常量
-  events.go      五个领域事件（granted/consumed/equipped/unequipped/expired）
-  inventory.go   端口（DefSource/InstanceRepo/EquipRepo/IdempotencyStore）
-                 + Inventory：Grant / Use
-  equip.go       Equip / Unequip / Build 快照 + 场景排序（SortRegistry/TopN）
-  expiry.go      RunExpiry：remove / unequip / downgrade（降级继承目标时效）
-  relations.go   BindRelation / DissolveRelation / RunRelationExpiry / BindCP + 解除联动
-  catalog/       具体道具类型（座驾/勋章/头饰/VIP/关系卡/飘屏/气泡/铭牌/
-                 CP戒指/头像框/改名卡/药水/宝箱）
-memory/      全部端口的内存实现 + DefRegistry + 一键装配的 Stack
-```
+## 7. 一条没能省掉的规律
 
-依赖方向单一：`item/catalog → item → relation/event`；`memory → item/relation`；
-测试（外部包 `item_test`）→ 以上全部。核心包不 import memory/catalog。
+新增**道具**是免费的：写个 struct，登记进 `Catalog`，引擎一行不动。
 
-## 3. 可选能力接口（Go 惯例：类型断言分发）
+新增**能力**不是免费的：要在 `item` 加接口，还要在 `engine` 加一处断言。
+没有任何架构能省掉后半句——新能力意味着新行为，行为总得写在某个地方。
+ECS 也一样：加一个 Component 是免费的，但你必须写一个 System 去读它，
+否则它就是一堆躺在内存里没人理的字节。
 
-| 接口 | 方法 | 通用层消费点 |
-|---|---|---|
-| `Def` | DefID/DisplayName/SortPriority/SortRarity/StackLimit/BindOnPickup | Common 内嵌自动满足 |
-| `Usable` | `Use(ctx, inv, owner, params)` | Inventory.Use：逐单位调用，成功后扣减 |
-| `Equippable` | `EquipSlot()/Capacity()` | Equip：槽位与容量检查 |
-| `EquipGated` | `CanEquip(ctx, inv, owner)` | Equip：前置条件由道具自判 |
-| `RelationGated` | `RequiresRelation()` | 关系解除/到期联动卸下 |
-| `Expirable` | `Lifetime()/ExpirePolicy()/DowngradeTo()` | RunExpiry：三种策略统一执行 |
-| `Passive` | `Modifiers()` | Build 快照聚合修饰符 |
-
-## 4. 通用层与道具类型的分工
-
-通用层（Inventory）只做与道具种类无关的事：
-
-- **Grant**：幂等键抢占、堆叠合并（仅同定义+同时效窗口）、时效设置、绑定置位、事件。
-- **Use**：归属/状态/数量校验 → 逐单位调用道具 `Use` → 全部成功后 CAS 扣减。
-  道具失败即中止（不出现"扣了道具没给效果"），缺参数由道具在副作用前报错。
-- **Equip/Unequip**：容量、前置断言、穿戴记录（CAS）。
-- **RunExpiry**：remove / unequip / downgrade；降级原地改写实例（同 ID 换定义），
-  时效继承目标道具（支持 vip3→vip1→vip0 链）。
-- **关系流程**：Bind/Dissolve/RunRelationExpiry + BindCP 组合流程 + 解除联动卸下。
-- **Build 快照**：按槽位聚合 + 场景排序（SortRegistry / TopN）。
-
-道具类型负责全部业务行为：改名卡调用户服务、飘屏卡调广播端口、宝箱调 `inv.Grant`
-再发放、座驾查等级源自判穿戴条件。外部服务是道具的字段，由装配方构造注入。
-
-## 5. 与 v1 的关键差异（为什么推翻重做）
-
-| v1（数据驱动） | v2（显式类型） |
-|---|---|
-| 模板 = `Behaviors map[string]map[string]any` 配置 | 模板 = Go 类型 + 类型化字段 |
-| Registry + 工厂 + Compile 解码配置 | 无解码；定义即编译产物 |
-| 使用产出效果命令，经 Materialize 物化后 Execute | 道具 `Use` 方法直接写业务；params 直传 |
-| 每命令私有端口 + 构造注入 + decodeEffect 登记 | 道具字段持有依赖，构造方注入 |
-| 7 个领域服务 + application 装配层 + grantAdapter | 单一 Inventory；效果直接调 inv，无环可破 |
-| 消费侧窄接口（每服务声明接口切片） | 端口接口声明一次（DefSource/InstanceRepo/...） |
-| 新效果 = Command + 构造器 + decodeEffect case + Ports 字段 + Deps 字段（5 处） | 新道具 = 1 个类型 + 方法（1 处） |
-
-**保留不变的通用语义**：模板/实例分离、CAS 乐观锁、幂等键、堆叠合并规则、
-使用成功才扣减、三种过期策略、降级继承目标时效、关系解除联动、场景排序、领域事件。
-
-## 6. 扩展指引
-
-- **新道具**：`type X struct { item.Common; ...依赖 }`，实现想要的能力接口，
-  `stack.Defs.Register(&X{...})`。完毕。
-- **新能力接口**（如"可升级"）：在 item 声明可选接口 + 在相关流程（Inventory 方法）
-  增加一个断言分支。
-- **真实存储**：按 `item.InstanceRepo / item.EquipRepo / item.DefSource /
-  item.IdempotencyStore / relation.Repo` 提供 MySQL/Redis 实现，替换 Stack 中的内存组件。
-
-## 7. 测试约定
-
-- 测试在 `item/` 下的外部包 `item_test`：经 memory/catalog 间接引用被测包，避免循环导入。
-- 确定性时间：装配后直接替换 `stack.Inv.Now = func() { return *clock }`，推进 `*clock`。
-- 关系过期测试需 `stack.Relations.UseClock(...)`（RelationRepo 内部按自身时钟过滤）。
-- `forceExpire` 直接改写实例 ExpireAt（版本 CAS），代替睡眠等待。
-- 固定随机：宝箱等道具的 `Rand` 字段注入 `fixedRand`。
-
-## 8. 已知边界
-
-- 存储仅有内存实现；MySQL/Redis 按第 6 节接口接入。
-- 对方同意流程（关系建立需双方确认）、VIP 每日定时特权未纳入。
-- DefRegistry 注册后无卸载；热更新道具定义需重启进程（这是有意的设计边界）。
+架构能做的不是让「新增能力」变免费，而是让它**局部**：
+改动落在两个文件里，不会散到每一个道具上。这是本库对那条规律的全部回应。
